@@ -27,11 +27,15 @@ public abstract class CollectionDomainEvent<S,T> extends AbstractInteractionEven
 
     //region > Default class
     /**
-     * Propagated if no custom subclass was specified using
-     * {@link org.apache.isis.applib.annotation.Collection#domainEvent()} annotation attribute.
+     * This class is the default for the
+     * {@link org.apache.isis.applib.annotation.Collection#domainEvent()} annotation attribute.  Whether this
+     * raises an event or not depends upon the "isis.reflector.facet.collectionAnnotation.domainEvent.postForDefault"
+     * configuration property.
      */
     public static class Default extends CollectionInteractionEvent<Object, Object> {
         private static final long serialVersionUID = 1L;
+        public Default(){}
+        @Deprecated
         public Default(
                 final Object source,
                 final Identifier identifier,
@@ -42,7 +46,45 @@ public abstract class CollectionDomainEvent<S,T> extends AbstractInteractionEven
     }
     //endregion
 
+    //region > Noop class
+
+    /**
+     * Convenience class to use indicating that an event should <i>not</i> be posted (irrespective of the configuration
+     * property setting for the {@link Default} event.
+     */
+    public static class Noop extends CollectionInteractionEvent<Object, Object> {
+        private static final long serialVersionUID = 1L;
+    }
+    //endregion
+
+    //region > Doop class
+
+    /**
+     * Convenience class meaning that an event <i>should</i> be posted (irrespective of the configuration
+     * property setting for the {@link Default} event..
+     */
+    public static class Doop extends CollectionInteractionEvent<Object, Object> {
+        private static final long serialVersionUID = 1L;
+    }
+    //endregion
+
+
     //region > constructors
+
+    /**
+     * If used then the framework will set state via (non-API) setters.
+     *
+     * <p>
+     *     Recommended because it reduces the amount of boilerplate in the domain object classes.
+     * </p>
+     */
+    public CollectionDomainEvent() {
+    }
+
+    /**
+     * @deprecated - the {@link #CollectionDomainEvent() no-arg constructor} is recommended instead, to reduce boilerplate.
+     */
+    @Deprecated
     public CollectionDomainEvent(
             final S source,
             final Identifier identifier,
@@ -51,6 +93,10 @@ public abstract class CollectionDomainEvent<S,T> extends AbstractInteractionEven
         this.of = of;
     }
 
+    /**
+     * @deprecated - the {@link #CollectionDomainEvent() no-arg constructor} is recommended instead, to reduce boilerplate.
+     */
+    @Deprecated
     public CollectionDomainEvent(
             final S source,
             final Identifier identifier,

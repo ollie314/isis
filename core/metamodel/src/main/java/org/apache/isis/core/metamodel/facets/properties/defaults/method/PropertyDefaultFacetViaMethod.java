@@ -29,19 +29,23 @@ import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.metamodel.facets.properties.defaults.PropertyDefaultFacetAbstract;
 
 public class PropertyDefaultFacetViaMethod extends PropertyDefaultFacetAbstract implements ImperativeFacet {
 
     private final Method method;
-    private final SpecificationLoader specificationLookup;
+    private final SpecificationLoader specificationLoader;
     private final AdapterManager adapterManager;
 
-    public PropertyDefaultFacetViaMethod(final Method method, final FacetHolder holder, final SpecificationLoader specificationLookup, final AdapterManager adapterManager) {
+    public PropertyDefaultFacetViaMethod(
+            final Method method,
+            final FacetHolder holder,
+            final SpecificationLoader specificationLoader,
+            final AdapterManager adapterManager) {
         super(holder);
         this.method = method;
-        this.specificationLookup = specificationLookup;
+        this.specificationLoader = specificationLoader;
         this.adapterManager = adapterManager;
     }
 
@@ -60,16 +64,6 @@ public class PropertyDefaultFacetViaMethod extends PropertyDefaultFacetAbstract 
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
-
-    @Override
-    public boolean impliesObjectChanged() {
-        return false;
-    }
-
-    @Override
     public ObjectAdapter getDefault(final ObjectAdapter owningAdapter) {
         final Object result = ObjectAdapter.InvokeUtils.invoke(method, owningAdapter);
         if (result == null) {
@@ -79,7 +73,7 @@ public class PropertyDefaultFacetViaMethod extends PropertyDefaultFacetAbstract 
     }
 
     private ObjectAdapter createAdapter(final Class<?> type, final Object object) {
-        final ObjectSpecification specification = getSpecificationLookup().loadSpecification(type);
+        final ObjectSpecification specification = getSpecificationLoader().loadSpecification(type);
         if (specification.isNotCollection()) {
             return getAdapterManager().adapterFor(object);
         } else {
@@ -96,8 +90,8 @@ public class PropertyDefaultFacetViaMethod extends PropertyDefaultFacetAbstract 
     // Dependencies (from constructor)
     // //////////////////////////////////////////////////////////////////
 
-    private SpecificationLoader getSpecificationLookup() {
-        return specificationLookup;
+    private SpecificationLoader getSpecificationLoader() {
+        return specificationLoader;
     }
 
     protected AdapterManager getAdapterManager() {

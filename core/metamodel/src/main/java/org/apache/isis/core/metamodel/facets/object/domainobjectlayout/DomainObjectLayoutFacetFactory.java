@@ -26,6 +26,7 @@ import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
 
 public class DomainObjectLayoutFacetFactory extends FacetFactoryAbstract {
 
+
     public DomainObjectLayoutFacetFactory() {
         super(FeatureType.OBJECTS_ONLY);
     }
@@ -38,6 +39,16 @@ public class DomainObjectLayoutFacetFactory extends FacetFactoryAbstract {
 
         final DomainObjectLayout domainObjectLayout = Annotations.getAnnotation(cls, DomainObjectLayout.class);
         final ViewModelLayout viewModelLayout = Annotations.getAnnotation(cls, ViewModelLayout.class);
+
+        FacetUtil.addFacet(
+                TitleFacetViaDomainObjectLayoutAnnotationUsingTitleUiEvent.create(
+                        domainObjectLayout, servicesInjector, getConfiguration(), facetHolder));
+        FacetUtil.addFacet(
+                IconFacetViaDomainObjectLayoutAnnotationUsingIconUiEvent.create(
+                        domainObjectLayout, servicesInjector, getConfiguration(), facetHolder));
+        FacetUtil.addFacet(
+                CssClassFacetViaDomainObjectLayoutAnnotationUsingCssClassUiEvent.create(
+                        domainObjectLayout, servicesInjector, getConfiguration(), facetHolder));
 
         FacetUtil.addFacet(
                 CssClassFacetForDomainObjectLayoutAnnotation.create(domainObjectLayout, facetHolder));
@@ -76,5 +87,8 @@ public class DomainObjectLayoutFacetFactory extends FacetFactoryAbstract {
 
         return;
     }
+
+
+
 
 }

@@ -64,5 +64,10 @@ public final class JdoColumnLength {
         public static final int EVENT_TYPE = 20;
         public static final int STATE = 20;
     }
-    
+
+    public static final class StatusMessage {
+        public static final int MESSAGE = 255;
+        public static final int URI = BOOKMARK;
+    }
+
 }

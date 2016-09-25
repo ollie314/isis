@@ -19,208 +19,198 @@
 
 package org.apache.isis.core.runtime.system.persistence;
 
-import java.util.List;
-import java.util.Properties;
+import java.util.Map;
+import java.util.Set;
+
+import javax.jdo.PersistenceManagerFactory;
+
+import org.datanucleus.PropertyNames;
+import org.datanucleus.api.jdo.JDOPersistenceManagerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.isis.applib.clock.Clock;
-import org.apache.isis.applib.fixtures.FixtureClock;
+
+import org.apache.isis.applib.annotation.Programmatic;
+import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.commons.components.ApplicationScopedComponent;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.metamodel.facetapi.MetaModelRefiner;
-import org.apache.isis.core.metamodel.progmodel.ProgrammingModel;
-import org.apache.isis.core.metamodel.runtimecontext.RuntimeContext;
-import org.apache.isis.core.metamodel.services.ServicesInjectorDefault;
-import org.apache.isis.core.metamodel.services.ServicesInjectorSpi;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
-import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.runtime.persistence.FixturesInstalledFlag;
-import org.apache.isis.core.runtime.persistence.ObjectStoreFactory;
-import org.apache.isis.core.runtime.persistence.internal.RuntimeContextFromSession;
-import org.apache.isis.core.runtime.system.DeploymentType;
-import org.apache.isis.core.runtime.system.context.IsisContext;
-
-import static org.apache.isis.core.commons.ensure.Ensure.ensureThatArg;
-import static org.apache.isis.core.commons.ensure.Ensure.ensureThatState;
-import static org.hamcrest.CoreMatchers.*;
+import org.apache.isis.objectstore.jdo.datanucleus.JDOStateManagerForIsis;
+import org.apache.isis.objectstore.jdo.service.RegisterEntities;
 
 /**
- * Implementation that just delegates to a supplied
- * {@link org.apache.isis.core.runtime.persistence.ObjectStoreFactory}.
+ *
+ * Factory for {@link PersistenceSession}.
+ *
+ * <p>
+ * Implementing class is added to {@link ServicesInjector} as an (internal) domain service; all public methods
+ * must be annotated using {@link Programmatic}.
+ * </p>
  */
-public class PersistenceSessionFactory implements MetaModelRefiner, ApplicationScopedComponent, FixturesInstalledFlag {
+public class PersistenceSessionFactory implements ApplicationScopedComponent, FixturesInstalledFlag {
 
     private static final Logger LOG = LoggerFactory.getLogger(PersistenceSessionFactory.class);
 
-    private final DeploymentType deploymentType;
-    private final IsisConfiguration configuration;
-    private final ObjectStoreFactory objectStoreFactory;
+    //region > constructor
+
+    private final IsisConfigurationDefault configuration;
+
+    public PersistenceSessionFactory(final IsisConfigurationDefault isisConfiguration) {
+        this.configuration = isisConfiguration;
+    }
+
+    //endregion
+
+    //region > init, createDataNucleusApplicationComponents
+
+    public static final String JDO_OBJECTSTORE_CONFIG_PREFIX = "isis.persistor.datanucleus";  // specific to the JDO objectstore
+    public static final String DATANUCLEUS_CONFIG_PREFIX = "isis.persistor.datanucleus.impl"; // reserved for datanucleus' own config props
+
+
+    private DataNucleusApplicationComponents applicationComponents;
+
+    @Programmatic
+    public void init(final SpecificationLoader specificationLoader) {
+        this.applicationComponents = createDataNucleusApplicationComponents(configuration, specificationLoader);
+    }
+
+    @Programmatic
+    public boolean isInitialized() {
+        return this.applicationComponents != null;
+    }
+
+    private DataNucleusApplicationComponents createDataNucleusApplicationComponents(
+            final IsisConfiguration configuration, final SpecificationLoader specificationLoader) {
+
+        if (applicationComponents == null || applicationComponents.isStale()) {
+
+            final IsisConfiguration jdoObjectstoreConfig = configuration.createSubset(
+                    JDO_OBJECTSTORE_CONFIG_PREFIX);
+
+            final IsisConfiguration dataNucleusConfig = configuration.createSubset(DATANUCLEUS_CONFIG_PREFIX);
+            final Map<String, String> datanucleusProps = dataNucleusConfig.asMap();
+            addDataNucleusPropertiesIfRequired(datanucleusProps);
+
+            final RegisterEntities registerEntities = new RegisterEntities(configuration.asMap(), specificationLoader);
+            final Set<String> classesToBePersisted = registerEntities.getEntityTypes();
+
+            applicationComponents = new DataNucleusApplicationComponents(jdoObjectstoreConfig, specificationLoader,
+                    datanucleusProps, classesToBePersisted);
+        }
+
+        return applicationComponents;
+    }
+
+    private static void addDataNucleusPropertiesIfRequired(
+            final Map<String, String> props) {
+
+        // new feature in DN 3.2.3; enables dependency injection into entities
+        putIfNotPresent(props, PropertyNames.PROPERTY_OBJECT_PROVIDER_CLASS_NAME, JDOStateManagerForIsis.class.getName());
+
+        putIfNotPresent(props, "javax.jdo.PersistenceManagerFactoryClass", JDOPersistenceManagerFactory.class.getName());
+
+        // previously we defaulted this property to "true", but that could cause the target database to be modified
+        putIfNotPresent(props, PropertyNames.PROPERTY_SCHEMA_AUTOCREATE_SCHEMA, Boolean.FALSE.toString());
+
+        putIfNotPresent(props, PropertyNames.PROPERTY_SCHEMA_VALIDATE_ALL, Boolean.TRUE.toString());
+        putIfNotPresent(props, PropertyNames.PROPERTY_CACHE_L2_TYPE, "none");
+
+        putIfNotPresent(props, PropertyNames.PROPERTY_PERSISTENCE_UNIT_LOAD_CLASSES, Boolean.TRUE.toString());
+
+        String connectionFactoryName = props.get(PropertyNames.PROPERTY_CONNECTION_FACTORY_NAME);
+        if(connectionFactoryName != null) {
+            String connectionFactory2Name = props.get(PropertyNames.PROPERTY_CONNECTION_FACTORY2_NAME);
+            String transactionType = props.get("javax.jdo.option.TransactionType");
+            // extended logging
+            if(transactionType == null) {
+                LOG.info("found config properties to use non-JTA JNDI datasource (" + connectionFactoryName + ")");
+                if(connectionFactory2Name != null) {
+                    LOG.warn("found config properties to use non-JTA JNDI datasource (" + connectionFactoryName + "); second '-nontx' JNDI datasource also configured but will not be used (" + connectionFactory2Name +")");
+                }
+            } else {
+                LOG.info("found config properties to use JTA JNDI datasource (" + connectionFactoryName + ")");
+            }
+            if(connectionFactory2Name == null) {
+                // JDO/DN itself will (probably) throw an exception
+                LOG.error("found config properties to use JTA JNDI datasource (" + connectionFactoryName + ") but config properties for second '-nontx' JNDI datasource were *not* found");
+            } else {
+                LOG.info("... and config properties for second '-nontx' JNDI datasource also found; " + connectionFactory2Name);
+            }
+            // nothing further to do
+            return;
+        } else {
+            // use JDBC connection properties; put if not present
+            LOG.info("did *not* find config properties to use JNDI datasource; will use JDBC");
+
+            putIfNotPresent(props, "javax.jdo.option.ConnectionDriverName", "org.hsqldb.jdbcDriver");
+            putIfNotPresent(props, "javax.jdo.option.ConnectionURL", "jdbc:hsqldb:mem:test");
+            putIfNotPresent(props, "javax.jdo.option.ConnectionUserName", "sa");
+            putIfNotPresent(props, "javax.jdo.option.ConnectionPassword", "");
+        }
+    }
+
+    private static void putIfNotPresent(
+            final Map<String, String> props,
+            String key,
+            String value) {
+        if(!props.containsKey(key)) {
+            props.put(key, value);
+        }
+    }
+    //endregion
+
+    //region > shutdown
+    @Programmatic
+    public final void shutdown() {
+        // no-op
+    }
+
+    //endregion
+
+
+    //region > createPersistenceSession
 
     /**
-     * @see #setServices(List)
+     * Called by {@link org.apache.isis.core.runtime.system.session.IsisSessionFactory#openSession(AuthenticationSession)}.
      */
-    private List<Object> serviceList;
+    @Programmatic
+    public PersistenceSession createPersistenceSession(
+            final ServicesInjector servicesInjector,
+            final AuthenticationSession authenticationSession) {
+
+        final FixturesInstalledFlag fixturesInstalledFlag = this;
+        final PersistenceManagerFactory persistenceManagerFactory =
+                applicationComponents.getPersistenceManagerFactory();
+
+        return new PersistenceSession(
+                servicesInjector,
+                authenticationSession, persistenceManagerFactory,
+                fixturesInstalledFlag);
+    }
+
+
+
+    //endregion
+
+    //region > FixturesInstalledFlag impl
 
     private Boolean fixturesInstalled;
 
-    private final ServicesInjectorSpi servicesInjector = new ServicesInjectorDefault();
-    private RuntimeContext runtimeContext;
-
-    public PersistenceSessionFactory(
-            final DeploymentType deploymentType,
-            final IsisConfiguration isisConfiguration,
-            final ObjectStoreFactory objectStoreFactory) {
-        this.deploymentType = deploymentType;
-        this.configuration = isisConfiguration;
-        this.objectStoreFactory = objectStoreFactory;
-    }
-
-    public DeploymentType getDeploymentType() {
-        return deploymentType;
-    }
-
-    public ObjectStoreFactory getDelegate() {
-        return objectStoreFactory;
-    }
-
-    public PersistenceSession createPersistenceSession() {
-
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("installing " + this.getClass().getName());
-        }
-
-        ServicesInjectorSpi servicesInjector = getServicesInjector();
-
-        final ObjectStore objectStore = objectStoreFactory.createObjectStore(getConfiguration());
-
-        ensureThatArg(objectStore, is(not(nullValue())));
-
-        final PersistenceSession persistenceSession = new PersistenceSession(this, servicesInjector, objectStore, getConfiguration());
-
-
-        return persistenceSession;
-    }
-
-    public final void init() {
-
-        // check prereq dependencies injected
-        ensureThatState(serviceList, is(notNullValue()));
-
-        // a bit of a workaround, but required if anything in the metamodel (for
-        // example, a
-        // ValueSemanticsProvider for a date value type) needs to use the Clock
-        // singleton
-        // we do this after loading the services to allow a service to prime a
-        // different clock
-        // implementation (eg to use an NTP time service).
-        if (!deploymentType.isProduction() && !Clock.isInitialized()) {
-            FixtureClock.initialize();
-        }
-
-        runtimeContext = createRuntimeContext(getConfiguration());
-        ensureThatState(runtimeContext, is(not(nullValue())));
-
-        // inject the specification loader etc.
-        runtimeContext.injectInto(servicesInjector);
-        
-        // wire up components
-
-        getSpecificationLoader().injectInto(runtimeContext);
-        for (Object service : serviceList) {
-            runtimeContext.injectInto(service);
-        }
-
-        servicesInjector.setServices(serviceList);
-        servicesInjector.init();
-    }
-
-    private RuntimeContext createRuntimeContext(final IsisConfiguration configuration) {
-        final RuntimeContextFromSession runtimeContext = new RuntimeContextFromSession();
-        final Properties properties = applicationPropertiesFrom(configuration);
-        runtimeContext.setProperties(properties);
-        return runtimeContext;
-    }
-
-    private static Properties applicationPropertiesFrom(final IsisConfiguration configuration) {
-        final Properties properties = new Properties();
-        final IsisConfiguration applicationConfiguration = configuration.getProperties("application");
-        for (final String key : applicationConfiguration) {
-            final String value = applicationConfiguration.getString(key);
-            final String newKey = key.substring("application.".length());
-            properties.setProperty(newKey, value);
-        }
-        return properties;
-    }
-
-
-
-    public final void shutdown() {
-        doShutdown();
-    }
-
-    /**
-     * Optional hook method for implementation-specific shutdown.
-     */
-    protected void doShutdown() {
-    }
-
-    
-    // //////////////////////////////////////////////////////
-    // Components (setup during init...)
-    // //////////////////////////////////////////////////////
-
-    public ServicesInjectorSpi getServicesInjector() {
-        return servicesInjector;
-    }
-
-    // //////////////////////////////////////////////////////
-    // MetaModelAdjuster impl
-    // //////////////////////////////////////////////////////
-
-    public void refineMetaModelValidator(MetaModelValidatorComposite metaModelValidator, IsisConfiguration configuration) {
-        objectStoreFactory.refineMetaModelValidator(metaModelValidator, configuration);
-    }
-
-    public void refineProgrammingModel(ProgrammingModel baseProgrammingModel, IsisConfiguration configuration) {
-        objectStoreFactory.refineProgrammingModel(baseProgrammingModel, configuration);
-    }
-
-    // //////////////////////////////////////////////////////
-    // FixturesInstalledFlag impl
-    // //////////////////////////////////////////////////////
-
+    @Programmatic
     @Override
     public Boolean isFixturesInstalled() {
         return fixturesInstalled;
     }
 
+    @Programmatic
     @Override
     public void setFixturesInstalled(final Boolean fixturesInstalled) {
         this.fixturesInstalled = fixturesInstalled;
     }
 
-    // //////////////////////////////////////////////////////
-    // Dependencies (injected from constructor)
-    // //////////////////////////////////////////////////////
+    //endregion
 
-    public IsisConfiguration getConfiguration() {
-        return configuration;
-    }
-    
-    // //////////////////////////////////////////////////////
-    // Dependencies (injected via setters)
-    // //////////////////////////////////////////////////////
-
-    public void setServices(final List<Object> serviceList) {
-        this.serviceList = serviceList;
-    }
-
-    // //////////////////////////////////////////////////////
-    // Dependencies (from context)
-    // //////////////////////////////////////////////////////
-
-    protected SpecificationLoaderSpi getSpecificationLoader() {
-        return IsisContext.getSpecificationLoader();
-    }
 
 }

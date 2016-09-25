@@ -23,6 +23,10 @@ import org.apache.isis.applib.util.Enums;
 public enum SemanticsOf {
 
     /**
+     * Safe, with no side effects, and caching the returned value when invoked multiple times in the same request.
+     */
+    SAFE_AND_REQUEST_CACHEABLE,
+    /**
      * Safe, with no side-effects.
      *
      * <p>
@@ -42,7 +46,27 @@ public enum SemanticsOf {
      * <p>
      * An example is increasing the quantity of a line item in an Order by 1.
      */
-    NON_IDEMPOTENT;
+    NON_IDEMPOTENT,
+    /**
+     * Post-conditions are always the same, irrespective as to how many times called.
+     *
+     * <p>
+     * If supported the UI viewer will show a confirmation dialog before executing the action.
+     *
+     * <p>
+     * An example might be <tt>placeOrder()</tt>, that is a no-op if the order has already been placed.
+     */
+    IDEMPOTENT_ARE_YOU_SURE,
+    /**
+     * Neither safe nor idempotent; every invocation is likely to change the state of the object.
+     *
+     * <p>
+     * If supported the UI viewer will show a confirmation dialog before executing the action.
+     *
+     * <p>
+     * An example is increasing the quantity of a line item in an Order by 1.
+     */
+    NON_IDEMPOTENT_ARE_YOU_SURE;
 
     public String getFriendlyName() {
         return Enums.getFriendlyNameOf(this);
@@ -53,22 +77,44 @@ public enum SemanticsOf {
     }
 
     /**
-     * {@link #SAFE} is idempotent in nature, as well as, obviously, {@link #IDEMPOTENT}.
+     * Any of {@link #SAFE}, {@link #SAFE_AND_REQUEST_CACHEABLE} or (obviously) {@link #IDEMPOTENT}.
      */
     public boolean isIdempotentInNature() {
-        return this == SAFE || this == IDEMPOTENT;
+        return isSafeInNature() || this == IDEMPOTENT || this == IDEMPOTENT_ARE_YOU_SURE;
     }
 
+    /**
+     * Either of {@link #SAFE} or {@link #SAFE_AND_REQUEST_CACHEABLE}.
+     */
+    public boolean isSafeInNature() {
+        return isSafeAndRequestCacheable() || this == SAFE;
+    }
+
+    /**
+     * @deprecated - use {@link #isSafeInNature()} instead (avoid any ambiguity).
+     */
+    @Deprecated
     public boolean isSafe() {
-        return this == SAFE;
+        return isSafeInNature();
+    }
+
+    public boolean isSafeAndRequestCacheable() {
+        return this == SAFE_AND_REQUEST_CACHEABLE;
+    }
+
+    public boolean isAreYouSure() {
+        return this == IDEMPOTENT_ARE_YOU_SURE || this == NON_IDEMPOTENT_ARE_YOU_SURE;
     }
 
     @Deprecated
     public static ActionSemantics.Of from(final SemanticsOf semantics) {
         if(semantics == null) return null;
+        if(semantics == SAFE_AND_REQUEST_CACHEABLE) return ActionSemantics.Of.SAFE_AND_REQUEST_CACHEABLE;
         if(semantics == SAFE) return ActionSemantics.Of.SAFE;
         if(semantics == IDEMPOTENT) return ActionSemantics.Of.IDEMPOTENT;
+        if(semantics == IDEMPOTENT_ARE_YOU_SURE) return ActionSemantics.Of.IDEMPOTENT_ARE_YOU_SURE;
         if(semantics == NON_IDEMPOTENT) return ActionSemantics.Of.NON_IDEMPOTENT;
+        if(semantics == NON_IDEMPOTENT_ARE_YOU_SURE) return ActionSemantics.Of.NON_IDEMPOTENT_ARE_YOU_SURE;
         // shouldn't happen
         throw new IllegalArgumentException("Unrecognized of: " + semantics);
     }
@@ -76,9 +122,12 @@ public enum SemanticsOf {
     @Deprecated
     public static SemanticsOf from(final ActionSemantics.Of semantics) {
         if(semantics == null) return null;
+        if(semantics == ActionSemantics.Of.SAFE_AND_REQUEST_CACHEABLE) return SAFE_AND_REQUEST_CACHEABLE;
         if(semantics == ActionSemantics.Of.SAFE) return SAFE;
         if(semantics == ActionSemantics.Of.IDEMPOTENT) return IDEMPOTENT;
+        if(semantics == ActionSemantics.Of.IDEMPOTENT_ARE_YOU_SURE) return IDEMPOTENT_ARE_YOU_SURE;
         if(semantics == ActionSemantics.Of.NON_IDEMPOTENT) return NON_IDEMPOTENT;
+        if(semantics == ActionSemantics.Of.NON_IDEMPOTENT_ARE_YOU_SURE) return NON_IDEMPOTENT_ARE_YOU_SURE;
         // shouldn't happen
         throw new IllegalArgumentException("Unrecognized semantics: " + semantics);
     }

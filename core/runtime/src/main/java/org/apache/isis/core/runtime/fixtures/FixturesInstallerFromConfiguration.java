@@ -26,12 +26,14 @@ import org.apache.isis.core.commons.config.ConfigurationConstants;
 import org.apache.isis.core.commons.exceptions.IsisException;
 import org.apache.isis.core.commons.factory.InstanceUtil;
 import org.apache.isis.core.runtime.fixtures.domainservice.ObjectLoaderFixture;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 
 public class FixturesInstallerFromConfiguration extends FixturesInstallerAbstract {
 
     private static final Logger LOG = LoggerFactory.getLogger(FixturesInstallerFromConfiguration.class);
 
-    private static final String FIXTURES = ConfigurationConstants.ROOT + "fixtures";
+    public static final String FIXTURES = ConfigurationConstants.ROOT + "fixtures";
+
     /**
      * @deprecated - just adds to the cognotive load...
      */
@@ -40,8 +42,8 @@ public class FixturesInstallerFromConfiguration extends FixturesInstallerAbstrac
 
     private static final String EXPLORATION_OBJECTS = ConfigurationConstants.ROOT + "exploration-objects";
 
-    public FixturesInstallerFromConfiguration() {
-        super("configuration");
+    public FixturesInstallerFromConfiguration(final IsisSessionFactory isisSessionFactory) {
+        super(isisSessionFactory);
     }
 
     @Override
@@ -58,15 +60,13 @@ public class FixturesInstallerFromConfiguration extends FixturesInstallerAbstrac
                 fixtureLoaded = true;
                 delegate.addFixture(fixture);
             }
-            if (getConfiguration().getBoolean(EXPLORATION_OBJECTS)) {
+            if (configuration.getBoolean(EXPLORATION_OBJECTS)) {
                 delegate.addFixture(new ObjectLoaderFixture());
             }
             if (!fixtureLoaded) {
                 LOG.debug("No fixtures loaded from configuration");
             }
-        } catch (final IllegalArgumentException e) {
-            throw new IsisException(e);
-        } catch (final SecurityException e) {
+        } catch (final IllegalArgumentException | SecurityException e) {
             throw new IsisException(e);
         }
     }
@@ -123,8 +123,8 @@ public class FixturesInstallerFromConfiguration extends FixturesInstallerAbstrac
     private FixtureConfig getFixtureConfig() {
         final FixtureConfig fixtureConfig = new FixtureConfig();
 
-        fixtureConfig.setFixtures(getConfiguration().getList(FIXTURES));
-        fixtureConfig.setFixturePrefix(getConfiguration().getString(FIXTURES_PREFIX));
+        fixtureConfig.setFixtures(configuration.getList(FIXTURES));
+        fixtureConfig.setFixturePrefix(configuration.getString(FIXTURES_PREFIX));
 
         return fixtureConfig;
     }

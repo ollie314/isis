@@ -23,13 +23,14 @@ import java.util.Collection;
 import org.apache.isis.applib.services.eventbus.AbstractDomainEvent;
 import org.apache.isis.applib.services.eventbus.CollectionDomainEvent;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.DomainEventHelper;
 import org.apache.isis.core.metamodel.facets.SingleValueFacetAbstract;
 import org.apache.isis.core.metamodel.facets.collections.modify.CollectionRemoveFromFacet;
 import org.apache.isis.core.metamodel.facets.propcoll.accessor.PropertyOrCollectionAccessorFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 
 
 public abstract class CollectionRemoveFromFacetForDomainEventFromAbstract
@@ -61,14 +62,11 @@ public abstract class CollectionRemoveFromFacetForDomainEventFromAbstract
     }
 
     @Override
-    public void remove(ObjectAdapter targetAdapter,
-                       ObjectAdapter referencedObjectAdapter) {
+    public void remove(
+            final ObjectAdapter targetAdapter,
+            final ObjectAdapter referencedObjectAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         if (this.collectionRemoveFromFacet == null) {
-            return;
-        }
-        if(!domainEventHelper.hasEventBusService()) {
-            collectionRemoveFromFacet.remove(targetAdapter,
-                    referencedObjectAdapter);
             return;
         }
 
@@ -76,7 +74,8 @@ public abstract class CollectionRemoveFromFacetForDomainEventFromAbstract
         final Object referencedObject = ObjectAdapter.Util.unwrap(referencedObjectAdapter);
 
         // get hold of underlying collection
-        final Object collection = getterFacet.getProperty(targetAdapter);
+        // passing null through for authenticationSession/deploymentType means to avoid any visibility filtering.
+        final Object collection = getterFacet.getProperty(targetAdapter, interactionInitiatedBy);
 
         // don't post event if the collections does not contain object
         if (!((Collection<?>) collection).contains(referencedObject)) {
@@ -96,7 +95,7 @@ public abstract class CollectionRemoveFromFacetForDomainEventFromAbstract
                         referencedObject);
 
         // ... perform remove
-        collectionRemoveFromFacet.remove(targetAdapter, referencedObjectAdapter);
+        collectionRemoveFromFacet.remove(targetAdapter, referencedObjectAdapter, interactionInitiatedBy);
 
         // ... and post the executed event
         domainEventHelper.postEventForCollection(

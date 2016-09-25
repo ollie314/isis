@@ -19,45 +19,26 @@
 
 package org.apache.isis.core.metamodel.facets.object.domainobject.autocomplete;
 
-import org.apache.isis.applib.annotation.DomainObject;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import java.lang.reflect.Method;
+
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
-import org.apache.isis.core.metamodel.facets.object.autocomplete.AutoCompleteFacet;
 import org.apache.isis.core.metamodel.facets.object.autocomplete.AutoCompleteFacetAbstract;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 
 public class AutoCompleteFacetForDomainObjectAnnotation extends AutoCompleteFacetAbstract {
 
     private final Class<?> repositoryClass;
     private final String actionName;
 
-    public static AutoCompleteFacet create(
-            final DomainObject domainObject,
-            final SpecificationLoader specificationLoader,
-            final AdapterManager adapterManager,
-            final ServicesInjector servicesInjector,
-            final FacetHolder holder) {
-
-        if(domainObject == null) {
-            return null;
-        }
-
-        final Class<?> autoCompleteRepository = domainObject.autoCompleteRepository();
-        if(autoCompleteRepository == null || autoCompleteRepository == Object.class) {
-            return null;
-        }
-        final String autoCompleteAction = domainObject.autoCompleteAction();
-        return new AutoCompleteFacetForDomainObjectAnnotation(holder, autoCompleteRepository, autoCompleteAction, specificationLoader, adapterManager, servicesInjector);
-    }
-
-    private AutoCompleteFacetForDomainObjectAnnotation(
-            final FacetHolder holder, final Class<?> repositoryClass, final String actionName, final SpecificationLoader specificationLoader, final AdapterManager adapterManager, final ServicesInjector servicesInjector) {
-        super(holder, repositoryClass, actionName, specificationLoader, adapterManager, servicesInjector);
+    public AutoCompleteFacetForDomainObjectAnnotation(
+            final FacetHolder facetHolder,
+            final Class<?> repositoryClass,
+            final Method repositoryMethod,
+            final ServicesInjector servicesInjector) {
+        super(facetHolder, repositoryClass, repositoryMethod, servicesInjector);
         this.repositoryClass = repositoryClass;
-        this.actionName = actionName;
+        this.actionName = repositoryMethod.getName();
     }
-
 
     /**
      * Introduced for testing only.

@@ -19,14 +19,9 @@
 
 package org.apache.isis.core.metamodel.facets.actions.action.invocation;
 
-import java.util.Arrays;
-import java.util.List;
-
-import org.apache.isis.applib.services.command.Command;
-import org.apache.isis.applib.services.command.CommandContext;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
-import org.apache.isis.core.metamodel.facetapi.IdentifiedHolder;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 
@@ -40,84 +35,15 @@ import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
  */
 public interface ActionInvocationFacet extends Facet {
 
-    @Deprecated
-    public ObjectAdapter invoke(ObjectAdapter targetAdapter, ObjectAdapter[] argumentAdapters);
+    ObjectAdapter invoke(
+            ObjectAction owningAction,
+            ObjectAdapter targetAdapter,
+            ObjectAdapter mixedInAdapter,  // null for regular or contributed (not mixin) actions
+            ObjectAdapter[] argumentAdapters,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
-    public ObjectAdapter invoke(ObjectAction owningAction, ObjectAdapter targetAdapter, ObjectAdapter[] argumentAdapters);
+    ObjectSpecification getReturnType();
 
-    public ObjectSpecification getReturnType();
-
-    public ObjectSpecification getOnType();
-
-    public static class CurrentInvocation {
-
-        private final Command command;
-        
-        private final ObjectAdapter target;
-        private final IdentifiedHolder action;
-        private final List<ObjectAdapter> parameters;
-        private final ObjectAdapter result;
-
-        public CurrentInvocation(
-                final ObjectAdapter target,
-                final IdentifiedHolder action,
-                final ObjectAdapter[] parameters,
-                final ObjectAdapter result, 
-                final Command command) {
-            this(target, action, Arrays.asList(parameters), result, command);
-        }
-
-        public CurrentInvocation(
-                final ObjectAdapter target,
-                final IdentifiedHolder action,
-                final List<ObjectAdapter> parameters,
-                final ObjectAdapter result, 
-                final Command command) {
-            this.target = target;
-            this.action = action;
-            this.parameters = parameters;
-            this.result = result;
-            this.command = command;
-        }
-
-        /**
-         * deprecated since part of {@link #getCommand()}
-         */
-        @Deprecated
-        public ObjectAdapter getTarget() {
-            return target;
-        }
-        /**
-         * deprecated since part of {@link #getCommand()}
-         */
-        @Deprecated
-        public IdentifiedHolder getAction() {
-            return action;
-        }
-
-        public List<ObjectAdapter> getParameters() {
-            return parameters;
-        }
-        
-        /**
-         * deprecated since part of {@link #getCommand()}
-         */
-        @Deprecated
-        public ObjectAdapter getResult() {
-            return result;
-        }
-        
-        public Command getCommand() {
-            return command;
-        }
-    }
-    
-    /**
-     * TODO...
-     * @deprecated - should instead use the {@link CommandContext} request.
-     */
-    @Deprecated
-    public static ThreadLocal<CurrentInvocation> currentInvocation = new ThreadLocal<>();
-
+    ObjectSpecification getOnType();
 
 }

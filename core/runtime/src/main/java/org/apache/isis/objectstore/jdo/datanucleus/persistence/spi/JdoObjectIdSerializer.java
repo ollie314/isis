@@ -35,8 +35,9 @@ import org.datanucleus.identity.DatastoreId;
 import org.apache.isis.core.metamodel.adapter.oid.RootOid;
 import org.apache.isis.core.metamodel.spec.ObjectSpecId;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.runtime.system.context.IsisContext;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 import org.apache.isis.objectstore.jdo.metamodel.facets.object.persistencecapable.JdoPersistenceCapableFacet;
 
 public final class JdoObjectIdSerializer {
@@ -125,7 +126,7 @@ public final class JdoObjectIdSerializer {
 
         // the JDO spec (5.4.3) requires that OIDs are serializable toString and 
         // recreatable through the constructor
-        return jdoOid.getClass().getName().toString() + SEPARATOR + jdoOid.toString();
+        return jdoOid.getClass().getName() + SEPARATOR + jdoOid.toString();
     }
 
     private static List<String> dnPrefixes = Arrays.asList("S", "I", "L", "M", "B");
@@ -216,7 +217,11 @@ public final class JdoObjectIdSerializer {
         return correspondingClass;
     }
 
-    private static SpecificationLoaderSpi getSpecificationLoader() {
-        return IsisContext.getSpecificationLoader();
+    private static SpecificationLoader getSpecificationLoader() {
+        return getIsisSessionFactory().getSpecificationLoader();
+    }
+
+    static IsisSessionFactory getIsisSessionFactory() {
+        return IsisContext.getSessionFactory();
     }
 }

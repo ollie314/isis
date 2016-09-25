@@ -19,14 +19,16 @@
 package org.apache.isis.tool.mavenplugin;
 
 import java.util.Collection;
-import org.apache.maven.plugin.MojoExecutionException;
+
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.isis.core.metamodel.app.IsisMetaModel;
+
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.metamodel.specloader.validator.ValidationFailures;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 
 @Mojo(
         name = "validate",
@@ -37,19 +39,36 @@ import org.apache.isis.core.metamodel.specloader.validator.ValidationFailures;
 )
 public class IsisMojoValidate extends IsisMojoAbstract {
 
+    private final MetaModelProcessor metaModelProcessor;
+
     protected IsisMojoValidate() {
-        super(new ValidateMetaModelProcessor());
+        this.metaModelProcessor = new ValidateMetaModelProcessor();
+    }
+
+    @Override
+    protected void doExecute(
+            final ContextForMojo context,
+            final IsisSessionFactory isisSessionFactory)
+            throws MojoFailureException {
+        final SpecificationLoader specificationLoader =
+                isisSessionFactory.getSpecificationLoader();
+        metaModelProcessor.process(context, specificationLoader);
     }
 
     static class ValidateMetaModelProcessor implements MetaModelProcessor {
+
+
         @Override
-        public void process(final IsisMetaModel isisMetaModel, final Context context) throws MojoFailureException, MojoExecutionException {
-            final Collection<ObjectSpecification> objectSpecifications = isisMetaModel.getSpecificationLoader().allSpecifications();
+        public void process(
+                final Context context, final SpecificationLoader specificationLoader)
+                throws MojoFailureException {
+
+            final ValidationFailures validationFailures = specificationLoader.validate();
+
+            final Collection<ObjectSpecification> objectSpecifications = specificationLoader.allSpecifications();
             for (ObjectSpecification objectSpecification : objectSpecifications) {
                 context.getLog().debug("loaded: " + objectSpecification.getFullIdentifier());
             }
-
-            final ValidationFailures validationFailures = isisMetaModel.getValidationFailures();
             if (validationFailures.occurred()) {
                 context.throwFailureException(validationFailures.getNumberOfMessages() + " problems found.", validationFailures.getMessages());
             }

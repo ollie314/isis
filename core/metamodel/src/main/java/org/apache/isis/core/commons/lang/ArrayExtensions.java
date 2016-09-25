@@ -25,6 +25,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import com.google.common.collect.Lists;
@@ -75,16 +76,19 @@ public final class ArrayExtensions {
     public static <T> T[] combine(final T[]... arrays) {
         final List<T> combinedList = Lists.newArrayList();
         for (final T[] array : arrays) {
-            for (final T t : array) {
-                combinedList.add(t);
-            }
+            Collections.addAll(combinedList, array);
         }
-        return combinedList.toArray(arrays[0]); // using 1st element of arrays
-                                                // to specify the type
+        return combinedList.toArray(arrays[0]); // using 1st element of arrays to specify the type
     }
 
+    public static <T> T[] appendT(final T[] array, final T obj) {
+        final List<T> combinedList = Lists.newArrayList();
+        combinedList.add(obj);
+        Collections.addAll(combinedList, array);
+        return combinedList.toArray(array); // using array to specify the type
+    }
     public static String[] append(final String[] extendee, final String... moreArgs) {
-        final ArrayList<String> argList = new ArrayList<String>();
+        final List<String> argList = Lists.newArrayList();
         argList.addAll(Arrays.asList(extendee));
         argList.addAll(Arrays.asList(moreArgs));
         return argList.toArray(new String[] {});
@@ -119,10 +123,10 @@ public final class ArrayExtensions {
         return list;
     }
 
-    public static <T> T coalesce(final T... strings) {
-        for (final T str : strings) {
-            if (str != null) {
-                return str;
+    public static <T> T coalesce(final T... objects) {
+        for (final T object : objects) {
+            if (object != null) {
+                return object;
             }
         }
         return null;

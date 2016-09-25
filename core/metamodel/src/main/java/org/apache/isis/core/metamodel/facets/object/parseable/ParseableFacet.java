@@ -19,8 +19,8 @@
 
 package org.apache.isis.core.metamodel.facets.object.parseable;
 
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facets.MultipleValueFacet;
 import org.apache.isis.core.metamodel.facets.object.title.TitleFacet;
 
@@ -35,12 +35,11 @@ public interface ParseableFacet extends MultipleValueFacet {
      * <p>
      * Equivalent to <tt>Parser#parseTextEntry(Object, String)</tt>, though may
      * be implemented through some other mechanism.
-     * @param localization TODO
-     * 
-     * @throws InvalidEntryException
-     * @throws TextEntryParseException
      */
-    ObjectAdapter parseTextEntry(ObjectAdapter original, String text, Localization localization);
+    ObjectAdapter parseTextEntry(
+            final ObjectAdapter original,
+            final String text,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     /**
      * A title for the object that is valid but which may be easier to edit than
@@ -52,5 +51,5 @@ public interface ParseableFacet extends MultipleValueFacet {
      * field. So, a date might be rendered via a {@link TitleFacet} as
      * <tt>May 2, 2007</tt>, but its parseable form might be <tt>20070502</tt>.
      */
-    public String parseableTitle(ObjectAdapter obj);
+    String parseableTitle(ObjectAdapter obj);
 }

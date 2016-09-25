@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
@@ -32,16 +33,22 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.isis.applib.annotation.MemberGroupLayout.ColumnSpans;
 import org.apache.isis.applib.annotation.Render;
 import org.apache.isis.applib.annotation.Render.Type;
 import org.apache.isis.applib.annotation.When;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.filter.Filter;
+import org.apache.isis.applib.services.grid.GridService;
 import org.apache.isis.core.commons.lang.ClassExtensions;
 import org.apache.isis.core.metamodel.facets.all.describedas.DescribedAsFacet;
 import org.apache.isis.core.metamodel.facets.all.hide.HiddenFacet;
 import org.apache.isis.core.metamodel.facets.all.named.NamedFacet;
+import org.apache.isis.core.metamodel.facets.collections.collection.defaultview.DefaultViewFacet;
 import org.apache.isis.core.metamodel.facets.members.cssclass.CssClassFacet;
 import org.apache.isis.core.metamodel.facets.members.disabled.DisabledFacet;
 import org.apache.isis.core.metamodel.facets.members.disabled.DisabledFacetAbstractImpl;
@@ -49,8 +56,8 @@ import org.apache.isis.core.metamodel.facets.members.order.MemberOrderFacet;
 import org.apache.isis.core.metamodel.facets.members.render.RenderFacet;
 import org.apache.isis.core.metamodel.facets.object.membergroups.MemberGroupLayoutFacet;
 import org.apache.isis.core.metamodel.facets.object.paged.PagedFacet;
-import org.apache.isis.core.metamodel.facets.objectvalue.typicallen.TypicalLengthFacet;
 import org.apache.isis.core.metamodel.facets.objectvalue.multiline.MultiLineFacet;
+import org.apache.isis.core.metamodel.facets.objectvalue.typicallen.TypicalLengthFacet;
 import org.apache.isis.core.metamodel.layout.memberorderfacet.MemberOrderFacetComparator;
 import org.apache.isis.core.metamodel.layoutmetadata.ActionLayoutFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.ActionRepr;
@@ -58,11 +65,12 @@ import org.apache.isis.core.metamodel.layoutmetadata.CollectionLayoutFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.ColumnRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.CssClassFaFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.CssClassFacetRepr;
+import org.apache.isis.core.metamodel.layoutmetadata.DefaultViewFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.DescribedAsFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.DisabledFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.HiddenFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.LayoutMetadata;
-import org.apache.isis.core.metamodel.layoutmetadata.LayoutMetadataReader;
+import org.apache.isis.core.metamodel.layoutmetadata.LayoutMetadataReader2;
 import org.apache.isis.core.metamodel.layoutmetadata.MemberGroupRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.MemberRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.MultiLineFacetRepr;
@@ -71,23 +79,31 @@ import org.apache.isis.core.metamodel.layoutmetadata.PagedFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.PropertyLayoutFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.RenderFacetRepr;
 import org.apache.isis.core.metamodel.layoutmetadata.TypicalLengthFacetRepr;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjectorAware;
+import org.apache.isis.core.metamodel.services.grid.fixedcols.applib.Hint;
 import org.apache.isis.core.metamodel.spec.ActionType;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.spec.ObjectSpecifications;
-import org.apache.isis.core.metamodel.spec.ObjectSpecifications.MemberGroupLayoutHint;
 import org.apache.isis.core.metamodel.spec.feature.Contributed;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAssociation;
 
-public class LayoutMetadataReaderFromJson implements LayoutMetadataReader {
+public class LayoutMetadataReaderFromJson implements LayoutMetadataReader2, ServicesInjectorAware {
 
-        public Properties asProperties(final Class<?> domainClass) {
-        final LayoutMetadata metadata;
-        try {
-            metadata = readMetadata(domainClass);
-        } catch (final Exception e) {
-            throw new ReaderException("Failed to locate/parse " + domainClass.getName() + ".layout.json file (" + e.getMessage() + ")", e);
+    private static final Logger LOG = LoggerFactory.getLogger(LayoutMetadataReaderFromJson.class);
+
+    @Override
+    public Support support() {
+        return Support.entitiesOnly();
+    }
+
+    public Properties asProperties(final Class<?> domainClass) {
+        final LayoutMetadata metadata = readMetadata(domainClass);
+        if(metadata == null) {
+            return null;
         }
+
         if(metadata.getColumns() == null || metadata.getColumns().size() != 4) {
             throw new ReaderException("JSON metadata must have precisely 4 columns (prop/prop/prop/coll)");
         }
@@ -216,6 +232,9 @@ public class LayoutMetadataReaderFromJson implements LayoutMetadataReader {
                 }
                 if(collectionLayout.describedAs != null) {
                     props.setProperty("member." + memberName + ".collectionLayout.describedAs", collectionLayout.describedAs);
+                }
+                if(collectionLayout.defaultView != null) {
+                    props.setProperty("member." + memberName + ".collectionLayout.defaultView", collectionLayout.defaultView);
                 }
                 if(collectionLayout.hidden != null) {
                     props.setProperty("member." + memberName + ".collectionLayout.hidden", ""+collectionLayout.hidden);
@@ -380,19 +399,57 @@ public class LayoutMetadataReaderFromJson implements LayoutMetadataReader {
         }
     }
 
-    public LayoutMetadata asLayoutMetadata(final Class<?> domainClass) throws ReaderException {
-        try {
-            return readMetadata(domainClass);
-        } catch (IOException | RuntimeException e) {
-            throw new ReaderException(e);
-        }
+    public LayoutMetadata asLayoutMetadata(final Class<?> domainClass)  {
+        return readMetadata(domainClass);
     }
 
     // //////////////////////////////////////
 
-    private LayoutMetadata readMetadata(final Class<?> domainClass) throws IOException {
-        final String content = ClassExtensions.resourceContent(domainClass, ".layout.json");
-        return readMetadata(content);
+    private final Set<Class<?>> blacklisted = Sets.newConcurrentHashSet();
+
+    private LayoutMetadata readMetadata(final Class<?> domainClass) {
+        final String content;
+
+        if(blacklisted.contains(domainClass)) {
+            return null;
+        }
+
+        try {
+            final GridService gridService = getGridService();
+            if(gridService.existsFor(domainClass)) {
+                blacklisted.add(domainClass);
+                return null;
+            }
+        } catch (IllegalArgumentException ex) {
+            // ignore
+        }
+
+
+        final String resourceName = domainClass.getSimpleName() + ".layout.json";
+        try {
+            content = ClassExtensions.resourceContentOf(domainClass, resourceName);
+        } catch (IOException | IllegalArgumentException ex) {
+
+            blacklisted.add(domainClass);
+            final String message = String .format(
+                    "Failed to locate file %s (relative to %s.class); ex: %s)",
+                    resourceName, domainClass.getName(), ex.getMessage());
+
+            LOG.debug(message);
+            return null;
+        }
+
+        try {
+            return readMetadata(content);
+        } catch(Exception ex) {
+
+            // note that we don't blacklist if the file exists but couldn't be parsed;
+            // the developer might fix so we will want to retry.
+            final String message = "Failed to parse " + domainClass.getName() + ".layout.json file (" + ex.getMessage() + ")";
+            LOG.warn(message);
+
+            return null;
+        }
     }
 
     LayoutMetadata readMetadata(final String content) {
@@ -419,13 +476,13 @@ public class LayoutMetadataReaderFromJson implements LayoutMetadataReader {
         ColumnRepr columnRepr;
         
         columnRepr = addColumnWithSpan(metadata, columnSpans.getLeft());
-        updateColumnMemberGroups(objectSpec, MemberGroupLayoutHint.LEFT, columnRepr, actionIdsForAssociations);
+        updateColumnMemberGroups(objectSpec, Hint.LEFT, columnRepr, actionIdsForAssociations);
         
         columnRepr = addColumnWithSpan(metadata, columnSpans.getMiddle());
-        updateColumnMemberGroups(objectSpec, MemberGroupLayoutHint.MIDDLE, columnRepr, actionIdsForAssociations);
+        updateColumnMemberGroups(objectSpec, Hint.MIDDLE, columnRepr, actionIdsForAssociations);
         
         columnRepr = addColumnWithSpan(metadata, columnSpans.getRight());
-        updateColumnMemberGroups(objectSpec, MemberGroupLayoutHint.RIGHT, columnRepr, actionIdsForAssociations);
+        updateColumnMemberGroups(objectSpec, Hint.RIGHT, columnRepr, actionIdsForAssociations);
         
         columnRepr = addColumnWithSpan(metadata, columnSpans.getCollections());
         updateCollectionColumnRepr(objectSpec, columnRepr, actionIdsForAssociations);
@@ -436,9 +493,10 @@ public class LayoutMetadataReaderFromJson implements LayoutMetadataReader {
         return gson.toJson(metadata);
     }
 
-    private static void updateColumnMemberGroups(final ObjectSpecification objectSpec, final MemberGroupLayoutHint hint, final ColumnRepr columnRepr, final Set<String> actionIdsForAssociations) {
+    private static void updateColumnMemberGroups(final ObjectSpecification objectSpec, final Hint hint, final ColumnRepr columnRepr, final Set<String> actionIdsForAssociations) {
         final List<ObjectAssociation> objectAssociations = propertiesOf(objectSpec);
-        final Map<String, List<ObjectAssociation>> associationsByGroup = ObjectAssociation.Util.groupByMemberOrderName(objectAssociations);
+        final Map<String, List<ObjectAssociation>> associationsByGroup = ObjectAssociation.Util.groupByMemberOrderName(objectAssociations
+        );
         
         final List<String> groupNames = ObjectSpecifications.orderByMemberGroups(objectSpec, associationsByGroup.keySet(), hint);
         
@@ -515,6 +573,11 @@ public class LayoutMetadataReaderFromJson implements LayoutMetadataReader {
             final DescribedAsFacetRepr describedAsFacetRepr = new DescribedAsFacetRepr();
             describedAsFacetRepr.value = describedAsFacet.value();
             memberRepr.describedAs = describedAsFacetRepr;
+        }
+        final DefaultViewFacet defaultViewFacet = assoc.getFacet(DefaultViewFacet.class);
+        if(defaultViewFacet != null && !defaultViewFacet.isNoop() && !Strings.isNullOrEmpty(defaultViewFacet.value())) {
+            final DefaultViewFacetRepr defaultViewFacetRepr = new DefaultViewFacetRepr();
+            defaultViewFacetRepr.value = describedAsFacet.value();
         }
         final NamedFacet namedFacet = assoc.getFacet(NamedFacet.class);
         if(namedFacet != null && !namedFacet.isNoop()) {
@@ -632,6 +695,20 @@ public class LayoutMetadataReaderFromJson implements LayoutMetadataReader {
     @Override
     public String toString() {
         return getClass().getName();
+    }
+
+
+
+    private GridService getGridService() {
+        return servicesInjector.lookupService(GridService.class);
+    }
+
+
+    private ServicesInjector servicesInjector;
+
+    @Override
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        this.servicesInjector = servicesInjector;
     }
 
 }

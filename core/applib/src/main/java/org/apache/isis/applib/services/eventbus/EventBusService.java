@@ -119,8 +119,8 @@ public abstract class EventBusService {
      *     @RequestScoped @DomainService
      *     public class SomeSubscribingService {
      *
-     *         @Inject private EventBusService ebs;
-     *         @Inject private SomeSubscribingService proxy;
+     *         @javax.inject.Inject private EventBusService ebs;
+     *         @javax.inject.Inject private SomeSubscribingService proxy;
      *
      *         @PostConstruct
      *         public void startRequest() {
@@ -162,6 +162,7 @@ public abstract class EventBusService {
             eventBusImplementation.register(domainService);
         }
     }
+
 
     /**
      * Notionally allows subscribers to unregister from the event bus; however this is a no-op.
@@ -207,13 +208,18 @@ public abstract class EventBusService {
         getEventBusImplementation().post(event);
     }
 
+
+    protected boolean hasPosted() {
+        return this.eventBusImplementation != null;
+    }
+
     //endregion
 
 
     //region > getEventBus
 
     /**
-     * Lazily populated in {@link #getEventBusImplementation()}.
+     * Lazily populated in {@link #getEventBusImplementation()} as result of the first {@link #post(Object)}.
      */
     protected EventBusImplementation eventBusImplementation;
 

@@ -17,19 +17,16 @@
 package org.apache.isis.core.metamodel.specloader.specimpl;
 
 import java.util.List;
+
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.annotation.When;
 import org.apache.isis.applib.annotation.Where;
-import org.apache.isis.applib.filter.Filter;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
-import org.apache.isis.core.metamodel.facetapi.Facet;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetHolderImpl;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
-import org.apache.isis.core.metamodel.facetapi.MultiTypedFacet;
 import org.apache.isis.core.metamodel.facets.FacetedMethod;
 import org.apache.isis.core.metamodel.facets.members.disabled.DisabledFacet;
 import org.apache.isis.core.metamodel.facets.members.disabled.DisabledFacetForContributee;
@@ -38,15 +35,14 @@ import org.apache.isis.core.metamodel.facets.propcoll.notpersisted.NotPersistedF
 import org.apache.isis.core.metamodel.interactions.InteractionUtils;
 import org.apache.isis.core.metamodel.interactions.UsabilityContext;
 import org.apache.isis.core.metamodel.interactions.VisibilityContext;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
-import org.apache.isis.core.metamodel.spec.feature.ObjectMemberContext;
 
-public class OneToOneAssociationContributee extends OneToOneAssociationImpl implements ContributeeMember {
+public class OneToOneAssociationContributee extends OneToOneAssociationDefault implements ContributeeMember2 {
 
-    private final ObjectAdapter serviceAdapter;
+    private final Object servicePojo;
     private final ObjectAction serviceAction;
-    
 
     /**
      * Hold facets rather than delegate to the contributed action (different types might
@@ -57,12 +53,14 @@ public class OneToOneAssociationContributee extends OneToOneAssociationImpl impl
     private final Identifier identifier;
 
     public OneToOneAssociationContributee(
-            final ObjectAdapter serviceAdapter, 
-            final ObjectActionImpl serviceAction, 
+            final Object servicePojo,
+            final ObjectActionDefault serviceAction,
             final ObjectSpecification contributeeType,
-            final ObjectMemberContext objectMemberContext) {
-        super(serviceAction.getFacetedMethod(), serviceAction.getReturnType(), objectMemberContext);
-        this.serviceAdapter = serviceAdapter;
+            final ServicesInjector servicesInjector) {
+        super(serviceAction.getFacetedMethod(), serviceAction.getReturnType(), servicesInjector);
+
+        this.servicePojo = servicePojo;
+
         this.serviceAction = serviceAction;
 
         //
@@ -70,7 +68,7 @@ public class OneToOneAssociationContributee extends OneToOneAssociationImpl impl
         //
         final NotPersistedFacet notPersistedFacet = new NotPersistedFacetAbstract(this) {};
         final DisabledFacet disabledFacet = disabledFacet();
-        
+
         FacetUtil.addFacet(notPersistedFacet);
         FacetUtil.addFacet(disabledFacet);
 
@@ -87,7 +85,7 @@ public class OneToOneAssociationContributee extends OneToOneAssociationImpl impl
         final Identifier contributorIdentifier = contributor.getIdentifier();
         final String memberName = contributorIdentifier.getMemberName();
         List<String> memberParameterNames = contributorIdentifier.getMemberParameterNames();
-        
+
         identifier = Identifier.actionIdentifier(contributeeType.getCorrespondingClass().getName(), memberName, memberParameterNames);
     }
 
@@ -103,8 +101,8 @@ public class OneToOneAssociationContributee extends OneToOneAssociationImpl impl
     }
 
     @Override
-    public ObjectAdapter get(final ObjectAdapter ownerAdapter) {
-        return serviceAction.execute(serviceAdapter, new ObjectAdapter[]{ownerAdapter});
+    public ObjectAdapter get(final ObjectAdapter ownerAdapter, final InteractionInitiatedBy interactionInitiatedBy) {
+        return serviceAction.execute(getServiceAdapter(), null, new ObjectAdapter[]{ownerAdapter}, interactionInitiatedBy);
     }
 
     @Override
@@ -124,67 +122,41 @@ public class OneToOneAssociationContributee extends OneToOneAssociationImpl impl
     }
 
     @Override
-    public Consent isVisible(final AuthenticationSession session, final ObjectAdapter contributee, Where where) {
-        final VisibilityContext<?> ic = serviceAction.createVisibleInteractionContext(session, InteractionInvocationMethod.BY_USER, serviceAdapter, where);
+    public Consent isVisible(
+            final ObjectAdapter contributee,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            Where where) {
+        final VisibilityContext<?> ic = ((ObjectMemberAbstract)serviceAction).createVisibleInteractionContext(
+                getServiceAdapter(), interactionInitiatedBy, where);
         ic.putContributee(0, contributee); // by definition, the contributee will be the first arg of the service action
         return InteractionUtils.isVisibleResult(this, ic).createConsent();
     }
 
     @Override
-    public Consent isUsable(final AuthenticationSession session, final ObjectAdapter contributee, Where where) {
-        final UsabilityContext<?> ic = serviceAction.createUsableInteractionContext(session, InteractionInvocationMethod.BY_USER, serviceAdapter, where);
+    public Consent isUsable(
+            final ObjectAdapter contributee,
+            final InteractionInitiatedBy interactionInitiatedBy, final Where where) {
+        final UsabilityContext<?> ic = ((ObjectMemberAbstract)serviceAction).createUsableInteractionContext(
+                getServiceAdapter(), interactionInitiatedBy, where);
         ic.putContributee(0, contributee); // by definition, the contributee will be the first arg of the service action
         return InteractionUtils.isUsableResult(this, ic).createConsent();
     }
 
-    
-    // //////////////////////////////////////
-    // FacetHolder
-    // //////////////////////////////////////
-    
     @Override
-    public Class<? extends Facet>[] getFacetTypes() {
-        return facetHolder.getFacetTypes();
+    protected FacetHolder getFacetHolder() {
+        return facetHolder;
     }
 
-    @Override
-    public <T extends Facet> T getFacet(Class<T> cls) {
-        return facetHolder.getFacet(cls);
+    private ObjectAdapter getServiceAdapter() {
+        return getPersistenceSessionService().adapterFor(servicePojo);
     }
 
+    //region > Contributee2 impl - getServiceContributedBy()
     @Override
-    public boolean containsFacet(Class<? extends Facet> facetType) {
-        return facetHolder.containsFacet(facetType);
+    public ObjectSpecification getServiceContributedBy() {
+        return getServiceAdapter().getSpecification();
     }
 
-    @Override
-    public boolean containsDoOpFacet(java.lang.Class<? extends Facet> facetType) {
-        return facetHolder.containsDoOpFacet(facetType);
-    }
-
-    @Override
-    public List<Facet> getFacets(Filter<Facet> filter) {
-        return facetHolder.getFacets(filter);
-    }
-
-    @Override
-    public void addFacet(Facet facet) {
-        facetHolder.addFacet(facet);
-    }
-
-    @Override
-    public void addFacet(MultiTypedFacet facet) {
-        facetHolder.addFacet(facet);
-    }
-    
-    @Override
-    public void removeFacet(Facet facet) {
-        facetHolder.removeFacet(facet);
-    }
-
-    @Override
-    public void removeFacet(Class<? extends Facet> facetType) {
-        facetHolder.removeFacet(facetType);
-    }
+    //endregion
 
 }

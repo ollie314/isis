@@ -20,11 +20,10 @@
 package org.apache.isis.core.metamodel.facets.collections.modify;
 
 import java.lang.reflect.Method;
+
 import org.apache.isis.applib.services.i18n.TranslatableString;
 import org.apache.isis.applib.services.i18n.TranslationService;
 import org.apache.isis.core.commons.lang.StringExtensions;
-import org.apache.isis.core.metamodel.adapter.ObjectDirtier;
-import org.apache.isis.core.metamodel.adapter.ObjectDirtierAware;
 import org.apache.isis.core.metamodel.exceptions.MetaModelException;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
@@ -37,15 +36,13 @@ import org.apache.isis.core.metamodel.facets.MethodPrefixConstants;
 import org.apache.isis.core.metamodel.facets.collections.validate.CollectionValidateAddToFacetViaMethod;
 import org.apache.isis.core.metamodel.facets.collections.validate.CollectionValidateRemoveFromFacetViaMethod;
 import org.apache.isis.core.metamodel.methodutils.MethodScope;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjectorAware;
 
 /**
  * TODO: should probably split out into two {@link FacetFactory}s, one for
  * <tt>addTo()</tt>/<tt>removeFrom()</tt> and one for <tt>validateAddTo()</tt>/
  * <tt>validateRemoveFrom()</tt>.
  */
-public class CollectionAddToRemoveFromAndValidateFacetFactory extends MethodPrefixBasedFacetFactoryAbstract implements ObjectDirtierAware, ServicesInjectorAware {
+public class CollectionAddToRemoveFromAndValidateFacetFactory extends MethodPrefixBasedFacetFactoryAbstract  {
 
     private static final String[] PREFIXES = {};
 
@@ -96,7 +93,7 @@ public class CollectionAddToRemoveFromAndValidateFacetFactory extends MethodPref
         if (addToMethodIfAny != null) {
             return new CollectionAddToFacetViaMethod(addToMethodIfAny, holder);
         } else {
-            return new CollectionAddToFacetViaAccessor(accessorMethod, holder, getObjectDirtier());
+            return new CollectionAddToFacetViaAccessor(accessorMethod, holder);
         }
     }
 
@@ -108,7 +105,7 @@ public class CollectionAddToRemoveFromAndValidateFacetFactory extends MethodPref
         if (removeFromMethodIfAny != null) {
             return new CollectionRemoveFromFacetViaMethod(removeFromMethodIfAny, holder);
         } else {
-            return new CollectionRemoveFromFacetViaAccessor(accessorMethod, holder, getObjectDirtier());
+            return new CollectionRemoveFromFacetViaAccessor(accessorMethod, holder);
         }
     }
 
@@ -196,23 +193,4 @@ public class CollectionAddToRemoveFromAndValidateFacetFactory extends MethodPref
         FacetUtil.addFacet(facet);
     }
 
-    // ///////////////////////////////////////////////////////
-    // Dependencies (injected)
-    // ///////////////////////////////////////////////////////
-
-    private ObjectDirtier objectDirtier;
-    protected ObjectDirtier getObjectDirtier() {
-        return objectDirtier;
-    }
-
-    @Override
-    public void setObjectDirtier(final ObjectDirtier objectDirtier) {
-        this.objectDirtier = objectDirtier;
-    }
-
-    private ServicesInjector servicesInjector;
-    @Override
-    public void setServicesInjector(final ServicesInjector servicesInjector) {
-        this.servicesInjector = servicesInjector;
-    }
 }

@@ -19,11 +19,18 @@
 
 package org.apache.isis.core.metamodel.facets.object.recreatable;
 
+import java.lang.reflect.Method;
+import java.util.Map;
+
+import javax.annotation.PostConstruct;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import com.google.common.collect.Maps;
+
 import org.apache.isis.applib.RecreatableDomainObject;
 import org.apache.isis.applib.ViewModel;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManagerAware;
+import org.apache.isis.core.commons.lang.Nullable;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
@@ -31,18 +38,18 @@ import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facetapi.MetaModelValidatorRefiner;
 import org.apache.isis.core.metamodel.facets.Annotations;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
+import org.apache.isis.core.metamodel.facets.MethodFinderUtils;
+import org.apache.isis.core.metamodel.facets.PostConstructMethodCache;
 import org.apache.isis.core.metamodel.facets.object.viewmodel.ViewModelFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjectorAware;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorVisiting;
 import org.apache.isis.core.metamodel.specloader.validator.ValidationFailures;
 
-public class RecreatableObjectFacetFactory extends FacetFactoryAbstract implements ServicesInjectorAware, AdapterManagerAware, MetaModelValidatorRefiner {
-
-    private ServicesInjector servicesInjector;
-    private AdapterManager adapterManager;
+public class RecreatableObjectFacetFactory extends FacetFactoryAbstract
+        implements MetaModelValidatorRefiner, PostConstructMethodCache {
 
     public RecreatableObjectFacetFactory() {
         super(FeatureType.OBJECTS_ONLY);
@@ -57,23 +64,39 @@ public class RecreatableObjectFacetFactory extends FacetFactoryAbstract implemen
 
         // ViewModel interface
         if (ViewModel.class.isAssignableFrom(processClassContext.getCls())) {
-            FacetUtil.addFacet(new RecreatableObjectFacetForViewModelInterface(processClassContext.getFacetHolder()));
+            final PostConstructMethodCache postConstructMethodCache = this;
+            FacetUtil.addFacet(new RecreatableObjectFacetForRecreatableObjectInterface(
+                    processClassContext.getFacetHolder(), postConstructMethodCache, servicesInjector));
         }
 
         // ViewModel annotation
         final org.apache.isis.applib.annotation.ViewModel annotation = Annotations.getAnnotation(processClassContext.getCls(), org.apache.isis.applib.annotation.ViewModel.class);
         FacetUtil.addFacet(create(annotation, processClassContext.getFacetHolder()));
 
+        // XmlRootElement annotation
+        final XmlRootElement xmlRootElement = Annotations.getAnnotation(processClassContext.getCls(), XmlRootElement.class);
+        FacetUtil.addFacet(create(xmlRootElement, processClassContext.getFacetHolder()));
+
         // RecreatableDomainObject interface
         if (RecreatableDomainObject.class.isAssignableFrom(processClassContext.getCls())) {
-            FacetUtil.addFacet(new RecreatableObjectFacetForRecreatableDomainObjectInterface(processClassContext.getFacetHolder()));
+            final PostConstructMethodCache postConstructMethodCache = this;
+            FacetUtil.addFacet(new RecreatableObjectFacetForRecreatableDomainObjectInterface(
+                    processClassContext.getFacetHolder(), postConstructMethodCache, servicesInjector));
         }
 
         // DomainObject(nature=VIEW_MODEL) is managed by the DomainObjectFacetFactory
     }
 
     private ViewModelFacet create(final org.apache.isis.applib.annotation.ViewModel annotation, final FacetHolder holder) {
-        return annotation != null ? new RecreatableObjectFacetForViewModelAnnotation(holder, getSpecificationLoader(), adapterManager, servicesInjector) : null;
+        final PostConstructMethodCache postConstructMethodCache = this;
+        return annotation != null ? new RecreatableObjectFacetForViewModelAnnotation(holder, getSpecificationLoader(), adapterManager, servicesInjector, postConstructMethodCache) : null;
+    }
+
+    private ViewModelFacet create(final XmlRootElement annotation, final FacetHolder holder) {
+        final PostConstructMethodCache postConstructMethodCache = this;
+        return annotation != null
+                ? new RecreatableObjectFacetForXmlRootElementAnnotation(holder, servicesInjector, postConstructMethodCache)
+                : null;
     }
 
     // //////////////////////////////////////
@@ -102,16 +125,19 @@ public class RecreatableObjectFacetFactory extends FacetFactoryAbstract implemen
 
     // //////////////////////////////////////
 
+    private final Map<Class, Nullable<Method>> postConstructMethods = Maps.newHashMap();
+
+    public Method postConstructMethodFor(final Object pojo) {
+        return MethodFinderUtils.findAnnotatedMethod(pojo, PostConstruct.class, postConstructMethods);
+    }
 
 
     @Override
-    public void setServicesInjector(ServicesInjector servicesInjector) {
-        this.servicesInjector = servicesInjector;
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        adapterManager = servicesInjector.getPersistenceSessionServiceInternal();
     }
 
-    @Override
-    public void setAdapterManager(AdapterManager adapterManager) {
-        this.adapterManager = adapterManager;
-    }
+    PersistenceSessionServiceInternal adapterManager;
 
 }

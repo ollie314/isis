@@ -17,43 +17,33 @@
 package org.apache.isis.core.metamodel.specloader.specimpl;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+
 import com.google.common.collect.Lists;
+
 import org.apache.isis.applib.Identifier;
-import org.apache.isis.applib.services.actinvoc.ActionInvocationContext;
-import org.apache.isis.applib.annotation.Bulk;
-import org.apache.isis.applib.annotation.InvokedOn;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.filter.Filter;
-import org.apache.isis.applib.services.bookmark.Bookmark;
-import org.apache.isis.applib.services.command.Command;
-import org.apache.isis.applib.services.command.Command.Executor;
-import org.apache.isis.applib.services.command.CommandContext;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
-import org.apache.isis.core.commons.lang.ObjectExtensions;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetHolderImpl;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.MultiTypedFacet;
-import org.apache.isis.core.metamodel.facets.actions.bulk.BulkFacet;
-import org.apache.isis.core.metamodel.facets.actions.action.invocation.CommandUtil;
 import org.apache.isis.core.metamodel.interactions.InteractionUtils;
 import org.apache.isis.core.metamodel.interactions.UsabilityContext;
 import org.apache.isis.core.metamodel.interactions.VisibilityContext;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.core.metamodel.spec.feature.ObjectActionParameter;
-import org.apache.isis.core.metamodel.spec.feature.ObjectMemberContext;
 
-public class ObjectActionContributee extends ObjectActionImpl implements ContributeeMember {
+public class ObjectActionContributee extends ObjectActionDefault implements ContributeeMember2 {
 
-    private final ObjectAdapter serviceAdapter;
-    private final ObjectActionImpl serviceAction;
+    private final Object servicePojo;
+    private final ObjectActionDefault serviceAction;
     private final int contributeeParam;
     private final ObjectSpecification contributeeType;
     
@@ -63,26 +53,19 @@ public class ObjectActionContributee extends ObjectActionImpl implements Contrib
      */
     private final FacetHolder facetHolder = new FacetHolderImpl();
 
-    /**
-     * Lazily initialized by {@link #getParameters()} (so don't use directly!)
-     */
-    private List<ObjectActionParameterContributee> parameters;
-    
+
     
     private final Identifier identifier;
 
-    /**
-     * @param contributeeParam - the parameter number which corresponds to the contributee, and so should be suppressed.
-     */
     public ObjectActionContributee(
-            final ObjectAdapter serviceAdapter,
-            final ObjectActionImpl serviceAction,
+            final Object servicePojo,
+            final ObjectActionDefault serviceAction,
             final int contributeeParam,
             final ObjectSpecification contributeeType,
-            final ObjectMemberContext objectMemberContext) {
-        super(serviceAction.getFacetedMethod(), objectMemberContext);
-        
-        this.serviceAdapter = serviceAdapter;
+            final ServicesInjector servicesInjector) {
+        super(serviceAction.getFacetedMethod(), servicesInjector);
+
+        this.servicePojo = servicePojo;
         this.serviceAction = serviceAction;
         this.contributeeType = contributeeType;
         this.contributeeParam = contributeeParam;
@@ -120,123 +103,96 @@ public class ObjectActionContributee extends ObjectActionImpl implements Contrib
         return contributeeParam;
     }
 
-    public synchronized List<ObjectActionParameter> getParameters() {
-        
-        if (this.parameters == null) {
-            final List<ObjectActionParameter> serviceParameters = serviceAction.getParameters();
-            
-            final List<ObjectActionParameterContributee> contributeeParameters = Lists.newArrayList();
-            
-            int contributeeParamNum = 0;
-            for (int serviceParamNum = 0; serviceParamNum < serviceParameters.size(); serviceParamNum++ ) {
-                if(serviceParamNum == contributeeParam) {
-                    // skip so is omitted from the Contributed action
-                    continue;
-                }
-                
-                final ObjectActionParameterAbstract serviceParameter = 
-                        (ObjectActionParameterAbstract) serviceParameters.get(serviceParamNum);
-                final ObjectActionParameterContributee contributedParam;
-                if(serviceParameter instanceof ObjectActionParameterParseable) {
-                    contributedParam = new ObjectActionParameterParseableContributee(
-                            serviceAdapter, serviceAction, serviceParameter, serviceParamNum, 
-                            contributeeParamNum, this);
-                } else if(serviceParameter instanceof OneToOneActionParameterImpl) {
-                    contributedParam = new OneToOneActionParameterContributee(
-                            serviceAdapter, serviceAction, serviceParameter, serviceParamNum, 
-                            contributeeParamNum, this);
-                } else {
-                    throw new RuntimeException("Unknown implementation of ObjectActionParameter; " + serviceParameter.getClass().getName());
-                }
-                contributeeParameters.add(contributedParam);
-                
-                contributeeParamNum++;
-            }
-            this.parameters = contributeeParameters;
+    @Override
+    protected synchronized List<ObjectActionParameter> determineParameters() {
+        if (parameters != null) {
+            // because possible race condition (caller isn't synchronized)
+            return parameters;
         }
-        return ObjectExtensions.asListT(parameters, ObjectActionParameter.class);
+
+        final List<ObjectActionParameter> serviceParameters = serviceAction.getParameters();
+        final List<ObjectActionParameter> contributeeParameters = Lists.newArrayList();
+
+        int contributeeParamNum = 0;
+
+        for (int serviceParamNum = 0; serviceParamNum < serviceParameters.size(); serviceParamNum++ ) {
+            if(serviceParamNum == contributeeParam) {
+                // skip so is omitted from the Contributed action
+                continue;
+            }
+
+            final ObjectActionParameterAbstract serviceParameter =
+                    (ObjectActionParameterAbstract) serviceParameters.get(serviceParamNum);
+
+            final ObjectActionParameterContributee contributedParam;
+            contributedParam = new OneToOneActionParameterContributee(
+                    getServiceAdapter(), serviceParameter,
+                    contributeeParamNum, this);
+            contributeeParameters.add(contributedParam);
+
+            contributeeParamNum++;
+        }
+        return contributeeParameters;
     }
 
-    
     @Override
-    public Consent isVisible(final AuthenticationSession session, final ObjectAdapter contributee, Where where) {
-        final VisibilityContext<?> ic = serviceAction.createVisibleInteractionContext(session, InteractionInvocationMethod.BY_USER, serviceAdapter, where);
+    public Consent isVisible(
+            final ObjectAdapter contributee,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            Where where) {
+        final VisibilityContext<?> ic = serviceAction.createVisibleInteractionContext(getServiceAdapter(),
+                interactionInitiatedBy, where);
         ic.putContributee(this.contributeeParam, contributee);
         return InteractionUtils.isVisibleResult(this, ic).createConsent();
     }
 
     @Override
-    public Consent isUsable(final AuthenticationSession session, final ObjectAdapter contributee, Where where) {
-        final UsabilityContext<?> ic = serviceAction.createUsableInteractionContext(session, InteractionInvocationMethod.BY_USER, serviceAdapter, where);
+    public Consent isUsable(
+            final ObjectAdapter contributee,
+            final InteractionInitiatedBy interactionInitiatedBy, final Where where) {
+        final UsabilityContext<?> ic = serviceAction.createUsableInteractionContext(getServiceAdapter(),
+                interactionInitiatedBy, where);
         ic.putContributee(this.contributeeParam, contributee);
         return InteractionUtils.isUsableResult(this, ic).createConsent();
     }
 
     @Override
     public ObjectAdapter[] getDefaults(final ObjectAdapter target) {
-        final ObjectAdapter[] contributorDefaults = serviceAction.getDefaults(serviceAdapter);
+        final ObjectAdapter[] contributorDefaults = serviceAction.getDefaults(getServiceAdapter());
         return removeElementFromArray(contributorDefaults, contributeeParam, new ObjectAdapter[]{});
     }
 
     @Override
-    public ObjectAdapter[][] getChoices(final ObjectAdapter target) {
-        final ObjectAdapter[][] serviceChoices = serviceAction.getChoices(serviceAdapter);
+    public ObjectAdapter[][] getChoices(
+            final ObjectAdapter target,
+            final InteractionInitiatedBy interactionInitiatedBy) {
+        final ObjectAdapter[][] serviceChoices = serviceAction.getChoices(getServiceAdapter(),
+                interactionInitiatedBy);
         return removeElementFromArray(serviceChoices, contributeeParam, new ObjectAdapter[][]{});
     }
         
-    public Consent isProposedArgumentSetValid(final ObjectAdapter contributee, final ObjectAdapter[] proposedArguments) {
+    public Consent isProposedArgumentSetValid(
+            final ObjectAdapter contributee,
+            final ObjectAdapter[] proposedArguments,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         ObjectAdapter[] serviceArguments = argsPlusContributee(contributee, proposedArguments);
-        return serviceAction.isProposedArgumentSetValid(serviceAdapter, serviceArguments);
+        return serviceAction.isProposedArgumentSetValid(getServiceAdapter(), serviceArguments, interactionInitiatedBy);
     }
 
     @Override
-    public ObjectAdapter execute(final ObjectAdapter contributee, final ObjectAdapter[] arguments) {
-        
-        // this code also exists in ActionInvocationFacetViaMethod
-        // we need to repeat it here because the target adapter should be the contributee, not the contributing service.
+    public ObjectAdapter execute(
+            final ObjectAdapter targetAdapter,
+            final ObjectAdapter mixedInAdapter,
+            final ObjectAdapter[] argumentAdapters,
+            final InteractionInitiatedBy interactionInitiatedBy) {
 
-        final BulkFacet bulkFacet = getFacet(BulkFacet.class);
-        if (bulkFacet != null) {
+        setupCommand(targetAdapter, argumentAdapters);
 
-            final ActionInvocationContext actionInvocationContext = getServicesProvider().lookupService(ActionInvocationContext.class);
-            if (actionInvocationContext != null &&
-                    actionInvocationContext.getInvokedOn() == null) {
-
-                actionInvocationContext.setInvokedOn(InvokedOn.OBJECT);
-                actionInvocationContext.setDomainObjects(Collections.singletonList(contributee.getObject()));
-            }
-
-            final Bulk.InteractionContext bulkInteractionContext = getServicesProvider().lookupService(Bulk.InteractionContext.class);
-            if (bulkInteractionContext != null &&
-                    bulkInteractionContext.getInvokedAs() == null) {
-
-                bulkInteractionContext.setInvokedAs(Bulk.InteractionContext.InvokedAs.REGULAR);
-                actionInvocationContext.setDomainObjects(Collections.singletonList(contributee.getObject()));
-            }
-
-
-        }
-
-        final CommandContext commandContext = getServicesProvider().lookupService(CommandContext.class);
-        final Command command = commandContext != null ? commandContext.getCommand() : null;
-
-        if(command != null && command.getExecutor() == Executor.USER) {
-
-            if (command.getTarget() != null) {
-                // already set up by a edit form
-                // don't overwrite
-            } else {
-                command.setTargetClass(CommandUtil.targetClassNameFor(contributee));
-                command.setTargetAction(CommandUtil.targetActionNameFor(this));
-                command.setArguments(CommandUtil.argDescriptionFor(this, arguments));
-
-                final Bookmark targetBookmark = CommandUtil.bookmarkFor(contributee);
-                command.setTarget(targetBookmark);
-            }
-        }
-        
-        return serviceAction.execute(serviceAdapter, argsPlusContributee(contributee, arguments));
+        return serviceAction.executeInternal(
+                getServiceAdapter(), mixedInAdapter, argsPlusContributee(targetAdapter, argumentAdapters),
+                interactionInitiatedBy);
     }
+
 
     private ObjectAdapter[] argsPlusContributee(final ObjectAdapter contributee, final ObjectAdapter[] arguments) {
         return addElementToArray(arguments, contributeeParam, contributee, new ObjectAdapter[]{});
@@ -316,4 +272,12 @@ public class ObjectActionContributee extends ObjectActionImpl implements Contrib
         return list.toArray(t);
     }
 
+    public ObjectAdapter getServiceAdapter() {
+        return getPersistenceSessionService().adapterFor(servicePojo);
+    }
+
+    @Override
+    public ObjectSpecification getServiceContributedBy() {
+        return getServiceAdapter().getSpecification();
+    }
 }

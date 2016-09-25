@@ -23,10 +23,9 @@ import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import org.jmock.Expectations;
+
 import org.apache.isis.applib.annotation.When;
 import org.apache.isis.applib.security.UserMemento;
-import org.apache.isis.applib.services.i18n.TranslationService;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryTest;
 import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessMethodContext;
@@ -67,31 +66,22 @@ import org.apache.isis.core.metamodel.facets.members.hidden.staticmethod.HiddenF
 import org.apache.isis.core.metamodel.facets.members.named.staticmethod.NamedFacetStaticMethod;
 import org.apache.isis.core.metamodel.facets.members.named.staticmethod.NamedFacetStaticMethodFactory;
 import org.apache.isis.core.metamodel.facets.propcoll.accessor.PropertyOrCollectionAccessorFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 
 public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactoryTest {
 
     private JUnitRuleMockery2 context = JUnitRuleMockery2.createFor(JUnitRuleMockery2.Mode.INTERFACES_AND_CLASSES);
 
-    private ServicesInjector mockServicesInjector;
-    private TranslationService mockTranslationService;
-
     public void setUp() throws Exception {
         super.setUp();
-        mockServicesInjector = context.mock(ServicesInjector.class);
-        mockTranslationService = context.mock(TranslationService.class);
 
-        context.checking(new Expectations() {{
-            allowing(mockServicesInjector).lookupService(TranslationService.class);
-            will(returnValue(mockTranslationService));
-        }});
+
     }
-
 
     public void testPropertyAccessorFacetIsInstalledForJavaUtilCollectionAndMethodRemoved() {
         final CollectionAccessorFacetViaAccessorFactory facetFactory = new CollectionAccessorFacetViaAccessorFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         class Customer {
             @SuppressWarnings({ "rawtypes", "unused" })
@@ -114,7 +104,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testPropertyAccessorFacetIsInstalledForJavaUtilListAndMethodRemoved() {
         final CollectionAccessorFacetViaAccessorFactory facetFactory = new CollectionAccessorFacetViaAccessorFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         class Customer {
             @SuppressWarnings({ "rawtypes", "unused" })
@@ -137,7 +128,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testPropertyAccessorFacetIsInstalledForJavaUtilSetAndMethodRemoved() {
         final CollectionAccessorFacetViaAccessorFactory facetFactory = new CollectionAccessorFacetViaAccessorFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         class Customer {
             @SuppressWarnings({ "rawtypes", "unused" })
@@ -160,7 +152,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testPropertyAccessorFacetIsInstalledForObjectArrayAndMethodRemoved() {
         final CollectionAccessorFacetViaAccessorFactory facetFactory = new CollectionAccessorFacetViaAccessorFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         class Customer {
             @SuppressWarnings("unused")
@@ -183,7 +176,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testPropertyAccessorFacetIsInstalledForOrderArrayAndMethodRemoved() {
         final CollectionAccessorFacetViaAccessorFactory facetFactory = new CollectionAccessorFacetViaAccessorFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -209,7 +203,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testAddToFacetIsInstalledViaAccessorIfNoExplicitAddToMethodExists() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -233,7 +228,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testCannotInferTypeOfFacetIfNoExplicitAddToOrRemoveFromMethods() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -253,7 +249,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testRemoveFromFacetIsInstalledViaAccessorIfNoExplicitRemoveFromMethodExists() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -277,7 +274,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testAddToFacetIsInstalledAndMethodRemoved() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -308,7 +306,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testCanInferTypeOfFacetFromExplicitAddToMethod() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -336,7 +335,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testRemoveFromFacetIsInstalledAndMethodRemoved() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -367,7 +367,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testCanInferTypeOfFacetFromExplicitRemoveFromMethod() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -395,7 +396,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testClearFacetIsInstalledAndMethodRemoved() {
         final CollectionClearFacetFactory facetFactory = new CollectionClearFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings({ "hiding", "unused" })
         class Order {
@@ -426,7 +428,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testClearFacetIsInstalledViaAccessorIfNoExplicitClearMethod() {
         final CollectionClearFacetFactory facetFactory = new CollectionClearFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings({ "hiding", "unused" })
         class Order {
@@ -450,8 +453,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testValidateAddToFacetIsInstalledAndMethodRemoved() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
-        facetFactory.setServicesInjector(mockServicesInjector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -487,8 +490,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testValidateRemoveFromFacetIsInstalledAndMethodRemoved() {
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactory = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
-        facetFactory.setServicesInjector(mockServicesInjector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -524,7 +527,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testMethodFoundInSuperclass() {
         final CollectionAccessorFacetViaAccessorFactory facetFactory = new CollectionAccessorFacetViaAccessorFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -552,10 +556,12 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testMethodFoundInSuperclassButHelpeMethodsFoundInSubclasses() {
         final CollectionAccessorFacetViaAccessorFactory facetFactoryForAccessor = new CollectionAccessorFacetViaAccessorFactory();
-        facetFactoryForAccessor.setSpecificationLookup(programmableReflector);
+
+        facetFactoryForAccessor.setServicesInjector(stubServicesInjector);
+
         final CollectionAddToRemoveFromAndValidateFacetFactory facetFactoryForHelpers = new CollectionAddToRemoveFromAndValidateFacetFactory();
-        facetFactoryForHelpers.setSpecificationLookup(programmableReflector);
-        facetFactoryForHelpers.setServicesInjector(mockServicesInjector);
+
+        facetFactoryForHelpers.setServicesInjector(stubServicesInjector);
 
         @SuppressWarnings("hiding")
         class Order {
@@ -648,7 +654,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testInstallsNamedFacetUsingNameMethodAndRemovesMethod() {
         final NamedFacetStaticMethodFactory facetFactory = new NamedFacetStaticMethodFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         final Method collectionAccessorMethod = findMethod(CustomerStatic.class, "getOrders");
         final Method nameMethod = findMethod(CustomerStatic.class, "nameOrders");
@@ -666,7 +673,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testInstallsDescribedAsFacetUsingDescriptionAndRemovesMethod() {
         final DescribedAsFacetStaticMethodFactory facetFactory = new DescribedAsFacetStaticMethodFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         final Method collectionAccessorMethod = findMethod(CustomerStatic.class, "getOrders");
         final Method descriptionMethod = findMethod(CustomerStatic.class, "descriptionOrders");
@@ -684,7 +692,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testInstallsHiddenFacetUsingAlwaysHideAndRemovesMethod() {
         final HiddenFacetStaticMethodFactory facetFactory = new HiddenFacetStaticMethodFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         final Method collectionAccessorMethod = findMethod(CustomerStatic.class, "getOrders");
         final Method alwaysHideMethod = findMethod(CustomerStatic.class, "alwaysHideOrders");
@@ -700,7 +709,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testInstallsHiddenFacetUsingAlwaysHideWhenNotAndRemovesMethod() {
         final HiddenFacetStaticMethodFactory facetFactory = new HiddenFacetStaticMethodFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         final Method collectionAccessorMethod = findMethod(CustomerStatic.class, "getOtherOrders");
         final Method alwaysHideMethod = findMethod(CustomerStatic.class, "alwaysHideOtherOrders");
@@ -714,7 +724,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testInstallsDisabledFacetUsingProtectAndRemovesMethod() {
         final DisabledFacetStaticMethodFacetFactory facetFactory = new DisabledFacetStaticMethodFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         final Method collectionAccessorMethod = findMethod(CustomerStatic.class, "getOrders");
         final Method protectMethod = findMethod(CustomerStatic.class, "protectOrders");
@@ -732,7 +743,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testDoesNotInstallDisabledFacetUsingProtectWhenNotAndRemovesMethod() {
         final DisabledFacetStaticMethodFacetFactory facetFactory = new DisabledFacetStaticMethodFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         final Method collectionAccessorMethod = findMethod(CustomerStatic.class, "getOtherOrders");
         final Method protectMethod = findMethod(CustomerStatic.class, "protectOtherOrders");
@@ -746,7 +758,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testInstallsHiddenForSessionFacetAndRemovesMethod() {
         final HideForSessionFacetViaMethodFactory facetFactory = new HideForSessionFacetViaMethodFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         final Method collectionAccessorMethod = findMethod(CustomerStatic.class, "getOrders");
         final Method hideMethod = findMethod(CustomerStatic.class, "hideOrders", new Class[] { UserMemento.class });
@@ -764,7 +777,8 @@ public class CollectionFieldMethodsFacetFactoryTest extends AbstractFacetFactory
 
     public void testInstallsDisabledForSessionFacetAndRemovesMethod() {
         final DisableForSessionFacetViaMethodFactory facetFactory = new DisableForSessionFacetViaMethodFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         final Method collectionAccessorMethod = findMethod(CustomerStatic.class, "getOrders");
         final Method disableMethod = findMethod(CustomerStatic.class, "disableOrders", new Class[] { UserMemento.class });

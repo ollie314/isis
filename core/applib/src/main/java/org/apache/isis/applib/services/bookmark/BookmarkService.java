@@ -31,15 +31,24 @@ import org.apache.isis.applib.annotation.Programmatic;
  */
 public interface BookmarkService {
 
+    /**
+     * @deprecated - use {@link BookmarkService2#lookup(BookmarkHolder, BookmarkService2.FieldResetPolicy)} instead.
+     */
+    @Deprecated
     @Programmatic
     Object lookup(BookmarkHolder bookmarkHolder);
 
+    /**
+     * @deprecated - use {@link BookmarkService2#lookup(Bookmark, BookmarkService2.FieldResetPolicy)} instead.
+     */
+    @Deprecated
     @Programmatic
     Object lookup(Bookmark bookmark);
 
     /**
-     * As {@link #lookup(Bookmark)}, but downcasting to the specified type.
+     * @deprecated - use {@link BookmarkService2#lookup(Bookmark, BookmarkService2.FieldResetPolicy, Class)} instead.
      */
+    @Deprecated
     @Programmatic
     <T> T lookup(Bookmark bookmark, Class<T> cls);
 

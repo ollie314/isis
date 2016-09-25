@@ -20,6 +20,7 @@ package org.apache.isis.core.metamodel.facets.object.parseable;
 
 import java.util.IllegalFormatWidthException;
 
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 import org.jmock.Expectations;
 import org.jmock.auto.Mock;
 import org.junit.Before;
@@ -29,14 +30,12 @@ import org.junit.Test;
 
 import org.apache.isis.applib.adapters.Parser;
 import org.apache.isis.applib.adapters.ParsingException;
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.object.parseable.parser.ParseableFacetUsingParser;
 import org.apache.isis.core.metamodel.facets.object.value.ValueFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2.Mode;
 
@@ -50,9 +49,9 @@ public class ParseableFacetUsingParserTest {
     @Mock
     private AuthenticationSessionProvider mockAuthenticationSessionProvider;
     @Mock
-    private ServicesInjector mockDependencyInjector;
+    private ServicesInjector mockServicesInjector;
     @Mock
-    private AdapterManager mockAdapterManager;
+    private PersistenceSessionServiceInternal mockAdapterManager;
 
     private ParseableFacetUsingParser parseableFacetUsingParser;
 
@@ -67,13 +66,22 @@ public class ParseableFacetUsingParserTest {
                 allowing(mockFacetHolder).containsFacet(ValueFacet.class);
                 will(returnValue(Boolean.FALSE));
 
-                allowing(mockDependencyInjector).injectServicesInto(with(any(Object.class)));
+                allowing(mockServicesInjector).injectServicesInto(with(any(Object.class)));
+
+                allowing(mockServicesInjector).getAuthenticationSessionProvider();
+                will(returnValue(mockAuthenticationSessionProvider));
+
+                allowing(mockServicesInjector).getPersistenceSessionServiceInternal();
+                will(returnValue(mockAdapterManager));
+
+                allowing(mockServicesInjector).lookupService(AuthenticationSessionProvider.class);
+                will(returnValue(mockAuthenticationSessionProvider));
             }
         });
 
         final Parser<String> parser = new Parser<String>() {
             @Override
-            public String parseTextEntry(final Object contextPojo, final String entry, Localization localization) {
+            public String parseTextEntry(final Object contextPojo, final String entry) {
                 if (entry.equals("invalid")) {
                     throw new ParsingException();
                 }
@@ -92,7 +100,7 @@ public class ParseableFacetUsingParserTest {
             }
 
             @Override
-            public String displayTitleOf(final String object, final Localization localization) {
+            public String displayTitleOf(final String object) {
                 return null;
             }
 
@@ -106,7 +114,7 @@ public class ParseableFacetUsingParserTest {
                 return null;
             }
         };
-        parseableFacetUsingParser = new ParseableFacetUsingParser(parser, mockFacetHolder, DeploymentCategory.PRODUCTION, mockAuthenticationSessionProvider, mockDependencyInjector, mockAdapterManager);
+        parseableFacetUsingParser = new ParseableFacetUsingParser(parser, mockFacetHolder, mockServicesInjector);
     }
 
     @Ignore
@@ -128,7 +136,7 @@ public class ParseableFacetUsingParserTest {
          * will(returnValue(session));
          * 
          * allowing(mockSpecification).createValidityInteractionContext(session,
-         * InteractionInvocationMethod.BY_USER, mockAdapter); }}); ObjectAdapter
+         * InteractionInvocationMethod.USER, mockAdapter); }}); ObjectAdapter
          * adapter = parseableFacetUsingParser.parseTextEntry(null, "xxx");
          * 
          * adapter.getObject();
@@ -137,16 +145,16 @@ public class ParseableFacetUsingParserTest {
 
     @Test(expected = TextEntryParseException.class)
     public void parsingExceptionRethrown() throws Exception {
-        parseableFacetUsingParser.parseTextEntry(null, "invalid", null);
+        parseableFacetUsingParser.parseTextEntry(null, "invalid", InteractionInitiatedBy.USER);
     }
 
     @Test(expected = TextEntryParseException.class)
     public void numberFormatExceptionRethrown() throws Exception {
-        parseableFacetUsingParser.parseTextEntry(null, "number", null);
+        parseableFacetUsingParser.parseTextEntry(null, "number", InteractionInitiatedBy.USER);
     }
 
     @Test(expected = TextEntryParseException.class)
     public void illegalFormatExceptionRethrown() throws Exception {
-        parseableFacetUsingParser.parseTextEntry(null, "format", null);
+        parseableFacetUsingParser.parseTextEntry(null, "format", InteractionInitiatedBy.USER);
     }
 }

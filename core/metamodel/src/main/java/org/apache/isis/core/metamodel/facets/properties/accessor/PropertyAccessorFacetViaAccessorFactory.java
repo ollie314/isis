@@ -29,6 +29,8 @@ import org.apache.isis.core.metamodel.facetapi.MethodRemover;
 import org.apache.isis.core.metamodel.methodutils.MethodScope;
 import org.apache.isis.core.metamodel.facets.MethodPrefixConstants;
 import org.apache.isis.core.metamodel.facets.PropertyOrCollectionIdentifyingFacetFactoryAbstract;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 
 public class PropertyAccessorFacetViaAccessorFactory extends PropertyOrCollectionIdentifyingFacetFactoryAbstract {
 
@@ -43,14 +45,19 @@ public class PropertyAccessorFacetViaAccessorFactory extends PropertyOrCollectio
         attachPropertyAccessFacetForAccessorMethod(processMethodContext);
     }
 
-    private static void attachPropertyAccessFacetForAccessorMethod(final ProcessMethodContext processMethodContext) {
-
+    private void attachPropertyAccessFacetForAccessorMethod(final ProcessMethodContext processMethodContext) {
         final Method accessorMethod = processMethodContext.getMethod();
-
         processMethodContext.removeMethod(accessorMethod);
 
         final FacetHolder property = processMethodContext.getFacetHolder();
-        FacetUtil.addFacet(new PropertyAccessorFacetViaAccessor(accessorMethod, property));
+        FacetUtil.addFacet(
+                new PropertyAccessorFacetViaAccessor(
+                        accessorMethod, property,
+                        getDeploymentCategory(), getConfiguration(),
+                        getSpecificationLoader(),
+                        getAuthenticationSessionProvider(),
+                        adapterManager
+                ));
     }
 
     // ///////////////////////////////////////////////////////
@@ -101,5 +108,13 @@ public class PropertyAccessorFacetViaAccessorFactory extends PropertyOrCollectio
     public void findAndRemoveCollectionAccessors(final MethodRemover methodRemover, final List<Method> methodListToAppendTo) {
         // does nothing
     }
+
+
+    @Override public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        adapterManager = servicesInjector.getPersistenceSessionServiceInternal();
+    }
+
+    PersistenceSessionServiceInternal adapterManager;
 
 }

@@ -19,23 +19,16 @@
 
 package org.apache.isis.core.metamodel.specloader.validator;
 
-import java.util.Collections;
 import java.util.List;
 
 import com.google.common.collect.Lists;
 
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
 public class MetaModelValidatorComposite extends MetaModelValidatorAbstract {
 
     private final List<MetaModelValidator> validators = Lists.newArrayList();
 
-    @Override
-    public void validate(final ValidationFailures validationFailures)  {
-        for (final MetaModelValidator validator : validators) {
-            validator.validate(validationFailures);
-        }
-    }
 
     public MetaModelValidatorComposite add(final MetaModelValidator validator) {
         validators.add(validator);
@@ -51,13 +44,23 @@ public class MetaModelValidatorComposite extends MetaModelValidatorAbstract {
         return this;
     }
 
+
     @Override
-    public void setSpecificationLoaderSpi(final SpecificationLoaderSpi specificationLoader) {
-        super.setSpecificationLoaderSpi(specificationLoader);
+    public void init(final SpecificationLoader specificationLoader) {
+        super.init(specificationLoader);
         for (final MetaModelValidator validator : validators) {
-            validator.setSpecificationLoaderSpi(specificationLoader);
+            validator.init(specificationLoader);
         }
     }
+
+
+    @Override
+    public void validate(final ValidationFailures validationFailures)  {
+        for (final MetaModelValidator validator : validators) {
+            validator.validate(validationFailures);
+        }
+    }
+
 
     public static MetaModelValidatorComposite asComposite(final MetaModelValidator baseMetaModelValidator) {
         final MetaModelValidatorComposite metaModelValidatorComposite = new MetaModelValidatorComposite();

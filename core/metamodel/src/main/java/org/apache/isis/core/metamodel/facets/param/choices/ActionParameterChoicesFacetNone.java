@@ -21,19 +21,30 @@ package org.apache.isis.core.metamodel.facets.param.choices;
 
 import java.util.List;
 
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
 public class ActionParameterChoicesFacetNone extends ActionParameterChoicesFacetAbstract {
 
-    public ActionParameterChoicesFacetNone(final FacetHolder holder, final SpecificationLoader specificationLookup, final AdapterManager adapterManager) {
-        super(holder, specificationLookup, adapterManager);
+    public ActionParameterChoicesFacetNone(
+            final FacetHolder holder,
+            final DeploymentCategory deploymentCategory,
+            final SpecificationLoader specificationLookup,
+            final AuthenticationSessionProvider authenticationSessionProvider,
+            final AdapterManager adapterManager) {
+        super(holder, deploymentCategory, specificationLookup, authenticationSessionProvider, adapterManager);
     }
 
     @Override
-    public Object[] getChoices(final ObjectAdapter adapter, final List<ObjectAdapter> arguments) {
+    public Object[] getChoices(
+            final ObjectAdapter adapter,
+            final List<ObjectAdapter> arguments,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         return new ObjectAdapter[0];
     }
 

@@ -16,16 +16,14 @@
  */
 package org.apache.isis.core.commons.authentication;
 
-import org.apache.isis.core.commons.components.Injectable;
+import org.apache.isis.applib.annotation.Programmatic;
 
-public interface AuthenticationSessionProvider extends Injectable {
+/**
+ * This is implemented by an (internal) domain service
+ */
+public interface AuthenticationSessionProvider {
 
-    /**
-     * Provided by <tt>AuthenticationManager</tt> when used by framework.
-     * 
-     * <p>
-     * Called in multiple places.
-     */
+    @Programmatic
     AuthenticationSession getAuthenticationSession();
 
 }

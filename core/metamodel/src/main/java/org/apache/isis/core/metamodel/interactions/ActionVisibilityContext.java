@@ -22,11 +22,10 @@ package org.apache.isis.core.metamodel.interactions;
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.events.ActionVisibilityEvent;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.InteractionContextType;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 
 import static org.apache.isis.core.metamodel.adapter.ObjectAdapter.Util.unwrap;
 
@@ -34,10 +33,23 @@ import static org.apache.isis.core.metamodel.adapter.ObjectAdapter.Util.unwrap;
  * See {@link InteractionContext} for overview; analogous to
  * {@link ActionVisibilityEvent}.
  */
-public class ActionVisibilityContext extends VisibilityContext<ActionVisibilityEvent> {
+public class ActionVisibilityContext extends VisibilityContext<ActionVisibilityEvent> implements ActionInteractionContext  {
 
-    public ActionVisibilityContext(DeploymentCategory deploymentCategory, final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter target, final Identifier identifier, Where where) {
-        super(InteractionContextType.ACTION_VISIBLE, deploymentCategory, session, invocationMethod, identifier, target, where);
+    private final ObjectAction objectAction;
+
+    public ActionVisibilityContext(
+            final ObjectAdapter targetAdapter,
+            final ObjectAction objectAction,
+            final Identifier identifier,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            final Where where) {
+        super(InteractionContextType.ACTION_VISIBLE, targetAdapter, identifier, interactionInitiatedBy, where);
+        this.objectAction = objectAction;
+    }
+
+    @Override
+    public ObjectAction getObjectAction() {
+        return objectAction;
     }
 
     @Override

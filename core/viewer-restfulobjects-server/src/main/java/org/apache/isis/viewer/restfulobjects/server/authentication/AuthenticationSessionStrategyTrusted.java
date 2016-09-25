@@ -18,25 +18,27 @@
  */
 package org.apache.isis.viewer.restfulobjects.server.authentication;
 
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.runtime.authentication.exploration.AuthenticationRequestExploration;
 import org.apache.isis.core.runtime.system.context.IsisContext;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 import org.apache.isis.core.webapp.auth.AuthenticationSessionStrategyDefault;
 
 public class AuthenticationSessionStrategyTrusted extends AuthenticationSessionStrategyDefault {
 
     @Override
-    public AuthenticationSession lookupValid(final ServletRequest servletRequest, final ServletResponse servletResponse) {
-        final AuthenticationSession session = super.lookupValid(servletRequest, servletResponse);
+    public AuthenticationSession lookupValid(final HttpServletRequest httpServletRequest, final HttpServletResponse httpServletResponse) {
+        final AuthenticationSession session = super.lookupValid(httpServletRequest, httpServletResponse);
         if (session != null) {
             return session;
         }
 
         // will always succeed.
         final AuthenticationRequestExploration request = new AuthenticationRequestExploration();
-        return IsisContext.getAuthenticationManager().authenticate(request);
+        return isisSessionFactoryFrom(httpServletRequest).getAuthenticationManager().authenticate(request);
     }
+
 }

@@ -24,11 +24,15 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 
-import org.apache.isis.core.commons.config.IsisConfigurationBuilder;
+import org.apache.isis.core.commons.configbuilder.IsisConfigurationBuilder;
 import org.apache.isis.core.runtime.optionhandler.BootPrinter;
 import org.apache.isis.core.runtime.optionhandler.OptionHandler;
 import org.apache.isis.core.webserver.WebServerConstants;
 
+/**
+ * @deprecated  - although was used, is too obscure.
+ */
+@Deprecated
 public final class OptionHandlerResourceBase implements OptionHandler {
     private String resourceBase;
     static final String RESOURCE_BASE_LONG_OPT = "webapp";
@@ -48,7 +52,7 @@ public final class OptionHandlerResourceBase implements OptionHandler {
     }
 
     @Override
-    public void primeConfigurationBuilder(final IsisConfigurationBuilder isisConfigurationBuilder) {
+    public void prime(final IsisConfigurationBuilder isisConfigurationBuilder) {
         if (resourceBase == null) {
             return;
         }

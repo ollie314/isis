@@ -45,12 +45,13 @@ public class MaskAnnotationFacetFactoryTest extends AbstractFacetFactoryTest {
     protected void setUp() throws Exception {
         super.setUp();
 
-        programmableReflector.setLoadSpecificationStringReturn(customerNoSpec);
+        // mockSpecificationLoader.setLoadSpecificationStringReturn(customerNoSpec);
+        allowing_specificationLoader_loadSpecification_any_willReturn(customerNoSpec);
+
     }
 
     public void testMaskAnnotationPickedUpOnClass() {
         final MaskFacetOnTypeAnnotationFactory facetFactory = new MaskFacetOnTypeAnnotationFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
 
         @Mask("###")
         class Customer {
@@ -66,7 +67,7 @@ public class MaskAnnotationFacetFactoryTest extends AbstractFacetFactoryTest {
 
     public void testMaskAnnotationPickedUpOnProperty() {
         final MaskFacetOnPropertyAnnotationFactory facetFactory = new MaskFacetOnPropertyAnnotationFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+        facetFactory.setServicesInjector(stubServicesInjector);
 
         class Customer {
             @SuppressWarnings("unused")
@@ -88,7 +89,8 @@ public class MaskAnnotationFacetFactoryTest extends AbstractFacetFactoryTest {
 
     public void testMaskAnnotationPickedUpOnActionParameter() {
         final MaskFacetOnParameterAnnotationFactory facetFactory = new MaskFacetOnParameterAnnotationFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+        facetFactory.setServicesInjector(stubServicesInjector);
+
 
         class Customer {
             @SuppressWarnings("unused")
@@ -108,7 +110,8 @@ public class MaskAnnotationFacetFactoryTest extends AbstractFacetFactoryTest {
 
     public void testMaskAnnotationNotIgnoredForNonStringsProperty() {
         final MaskFacetOnPropertyAnnotationFactory facetFactory = new MaskFacetOnPropertyAnnotationFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+        facetFactory.setServicesInjector(stubServicesInjector);
+
 
         class Customer {
             @SuppressWarnings("unused")
@@ -126,7 +129,8 @@ public class MaskAnnotationFacetFactoryTest extends AbstractFacetFactoryTest {
 
     public void testMaskAnnotationNotIgnoredForPrimitiveOnActionParameter() {
         final MaskFacetOnParameterAnnotationFactory facetFactory = new MaskFacetOnParameterAnnotationFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+        facetFactory.setServicesInjector(stubServicesInjector);
+
 
         class Customer {
             @SuppressWarnings("unused")

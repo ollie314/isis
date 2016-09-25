@@ -19,15 +19,17 @@
 
 package org.apache.isis.core.integtestsupport;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
-import org.junit.After;
-import org.junit.Assert;
+
 import org.junit.Before;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
+
+import org.apache.isis.applib.AppManifest;
 import org.apache.isis.applib.DomainObjectContainer;
 import org.apache.isis.applib.fixtures.FixtureClock;
 import org.apache.isis.applib.fixtures.InstallableFixture;
@@ -36,49 +38,44 @@ import org.apache.isis.applib.services.command.CommandContext;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.commons.config.IsisConfiguration;
 import org.apache.isis.core.commons.config.IsisConfigurationDefault;
-import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.oid.RootOid;
-import org.apache.isis.core.metamodel.progmodel.ProgrammingModel;
-import org.apache.isis.core.metamodel.services.ServicesInjectorSpi;
-import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidator;
-import org.apache.isis.core.objectstore.InMemoryPersistenceMechanismInstaller;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.specloader.validator.MetaModelInvalidException;
 import org.apache.isis.core.runtime.authentication.AuthenticationManager;
 import org.apache.isis.core.runtime.authentication.AuthenticationRequest;
 import org.apache.isis.core.runtime.fixtures.FixturesInstallerDelegate;
-import org.apache.isis.core.runtime.installerregistry.installerapi.PersistenceMechanismInstaller;
 import org.apache.isis.core.runtime.logging.IsisLoggingConfigurer;
-import org.apache.isis.core.runtime.services.ServicesInstaller;
-import org.apache.isis.core.runtime.services.ServicesInstallerFromConfigurationAndAnnotation;
-import org.apache.isis.core.runtime.system.DeploymentType;
 import org.apache.isis.core.runtime.system.context.IsisContext;
-import org.apache.isis.core.runtime.system.persistence.ObjectStore;
 import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactoryBuilder;
 import org.apache.isis.core.runtime.system.transaction.IsisTransaction;
 import org.apache.isis.core.runtime.system.transaction.IsisTransaction.State;
 import org.apache.isis.core.runtime.system.transaction.IsisTransactionManager;
+import org.apache.isis.core.runtime.systemusinginstallers.IsisComponentProvider;
 import org.apache.isis.core.security.authentication.AuthenticationRequestNameOnly;
 import org.apache.isis.core.specsupport.scenarios.DomainServiceProvider;
 
+import static org.junit.Assert.fail;
+
 /**
- * Wraps a plain {@link IsisSystemDefault}, and provides a number of features to assist with testing.
+ * Wraps a plain {@link IsisSessionFactoryBuilder}, and provides a number of features to assist with testing.
  */
 public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServiceProvider {
 
+    //region > Listener, ListenerAdapter
     public interface Listener {
 
         void init(IsisConfiguration configuration) throws Exception;
         
-        void preSetupSystem(boolean firstTime) throws Exception;
-        void postSetupSystem(boolean firstTime) throws Exception;
+        void preOpenSession(boolean firstTime) throws Exception;
+        void postOpenSession(boolean firstTime) throws Exception;
         
-        void preBounceSystem() throws Exception;
-        void postBounceSystem() throws Exception;
+        void preNextSession() throws Exception;
+        void postNextSession() throws Exception;
 
-        void preTeardownSystem() throws Exception;
-        void postTeardownSystem() throws Exception;
-        
+        void preCloseSession() throws Exception;
+        void postCloseSession() throws Exception;
     }
     
     public static abstract class ListenerAdapter implements Listener {
@@ -94,34 +91,35 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
         }
 
         @Override
-        public void preSetupSystem(boolean firstTime) throws Exception {
+        public void preOpenSession(boolean firstTime) throws Exception {
         }
 
         @Override
-        public void postSetupSystem(boolean firstTime) throws Exception {
+        public void postOpenSession(boolean firstTime) throws Exception {
         }
 
         @Override
-        public void preBounceSystem() throws Exception {
+        public void preNextSession() throws Exception {
         }
 
         @Override
-        public void postBounceSystem() throws Exception {
+        public void postNextSession() throws Exception {
         }
 
         @Override
-        public void preTeardownSystem() throws Exception {
+        public void preCloseSession() throws Exception {
         }
 
         @Override
-        public void postTeardownSystem() throws Exception {
+        public void postCloseSession() throws Exception {
         }
-
     }
 
-    // //////////////////////////////////////
+    //endregion
 
-    private static ThreadLocal<IsisSystemForTest> ISFT = new ThreadLocal<IsisSystemForTest>();
+    //region > getElseNull, get, set
+
+    private static ThreadLocal<IsisSystemForTest> ISFT = new ThreadLocal<>();
 
     public static IsisSystemForTest getElseNull() {
         return ISFT.get();
@@ -139,44 +137,22 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
     public static void set(IsisSystemForTest isft) {
         ISFT.set(isft);
     }
+    //endregion
 
-    // //////////////////////////////////////
+    //region > Builder
 
-
-    private IsisSystemDefault isisSystem;
-    private AuthenticationSession authenticationSession;
-
-    private final IsisConfiguration configuration;
-    private final PersistenceMechanismInstaller persistenceMechanismInstaller;
-    private final AuthenticationRequest authenticationRequest;
-    private final List<Object> services;
-    private final List<InstallableFixture> fixtures;
-    private List <Listener> listeners;
-    
-    private org.apache.log4j.Level level = org.apache.log4j.Level.INFO;
-    
-    private final MetaModelValidator metaModelValidator;
-    private final ProgrammingModel programmingModel;
-    
-    private DomainObjectContainer container;
-
-    
-    ////////////////////////////////////////////////////////////
-    // constructor
-    ////////////////////////////////////////////////////////////
 
     public static class Builder {
 
         private AuthenticationRequest authenticationRequest = new AuthenticationRequestNameOnly("tester");
-        
-        private IsisConfigurationDefault configuration;
-        private PersistenceMechanismInstaller persistenceMechanismInstaller = new InMemoryPersistenceMechanismInstaller();
-        private MetaModelValidator metaModelValidator;
-        private ProgrammingModel programmingModel;
+
+        private IsisConfigurationDefault configuration = new IsisConfigurationDefault();
+
+        private AppManifest appManifestIfAny;
 
         private final List<Object> services = Lists.newArrayList();
         private final List<InstallableFixture> fixtures = Lists.newArrayList();
-        
+
         private final List <Listener> listeners = Lists.newArrayList();
 
         private org.apache.log4j.Level level;
@@ -185,97 +161,53 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
             this.configuration = (IsisConfigurationDefault) configuration;
             return this;
         }
-        
-        public Builder with(PersistenceMechanismInstaller persistenceMechanismInstaller) {
-            this.persistenceMechanismInstaller = persistenceMechanismInstaller;
-            return this;
-        }
-        
+
         public Builder with(AuthenticationRequest authenticationRequest) {
             this.authenticationRequest = authenticationRequest;
             return this;
         }
 
-        public Builder withServicesIn(String... packagePrefixes ) {
-            if(packagePrefixes.length == 0) {
-                throw new IllegalArgumentException("Specify packagePrefixes to search for @DomainService-annotated services");
-            }
-
-            configuration.put(
-                    "isis.services.ServicesInstallerFromAnnotation.packagePrefix",
-                    Joiner.on(",").join(packagePrefixes)
-            );
-
-            final ServicesInstaller installer = new ServicesInstallerFromConfigurationAndAnnotation();
-            installer.setConfiguration(configuration);
-            final List<Object> serviceList = installer.getServices(null);
-            this.services.addAll(serviceList);
-
-            installer.init();
+        public Builder with(AppManifest appManifest) {
+            this.appManifestIfAny = appManifest;
             return this;
         }
 
-        public Builder withServices(Object... services) {
-            this.services.addAll(Arrays.asList(services));
-            return this;
-        }
-
-        /**
-         * @deprecated - prefer to use {@link org.apache.isis.applib.fixturescripts.FixtureScript}s API instead.
-         */
-        @Deprecated
-        public Builder withFixtures(InstallableFixture... fixtures) {
-            this.fixtures.addAll(Arrays.asList(fixtures));
-            return this;
-        }
-        
         public Builder withLoggingAt(org.apache.log4j.Level level) {
             this.level = level;
             return this;
         }
 
         public IsisSystemForTest build() {
-            final IsisSystemForTest isisSystem =
+            final IsisSystemForTest isisSystemForTest =
                     new IsisSystemForTest(
+                            appManifestIfAny,
                             configuration,
-                            programmingModel,
-                            metaModelValidator,
-                            persistenceMechanismInstaller,
                             authenticationRequest,
-                            services,
-                            fixtures,
                             listeners);
             if(level != null) {
-                isisSystem.setLevel(level);
+                isisSystemForTest.setLevel(level);
             }
 
             Runtime.getRuntime().addShutdownHook(new Thread() {
                 @Override
                 public synchronized void run() {
                     try {
-                        if (isisSystem != null) {
-                            isisSystem.tearDownSystem();
-                        }
+                        isisSystemForTest.closeSession();
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
 
                     try {
-                        if (isisSystem != null) {
-                            isisSystem.shutdown();
+                        if(isisSystemForTest.isisSessionFactory != null) {
+                            isisSystemForTest.isisSessionFactory.destroyServicesAndShutdown();
                         }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    try {
-                        IsisContext.shutdown();
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
             });
 
-            return isisSystem;
+            return isisSystemForTest;
         }
 
 
@@ -286,43 +218,39 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
             return this;
         }
 
-        public Builder with(MetaModelValidator metaModelValidator) {
-            this.metaModelValidator = metaModelValidator;
-            return this;
-        }
-
-        public Builder with(ProgrammingModel programmingModel) {
-            this.programmingModel = programmingModel;
-            return this;
-        }
     }
 
     public static Builder builder() {
         return new Builder();
     }
 
+    //endregion
+
+    //region > constructor, fields
+
+    // these fields 'xxxForComponentProvider' are used to initialize the IsisComponentProvider, but shouldn't be used thereafter.
+    private final AppManifest appManifestIfAny;
+    private final IsisConfiguration configurationOverride;
+
+    private final AuthenticationRequest authenticationRequestIfAny;
+    private AuthenticationSession authenticationSession;
+
+
     private IsisSystemForTest(
-            final IsisConfiguration configuration, 
-            final ProgrammingModel programmingModel, 
-            final MetaModelValidator metaModelValidator, 
-            final PersistenceMechanismInstaller persistenceMechanismInstaller, 
-            final AuthenticationRequest authenticationRequest, 
-            final List<Object> services, 
-            final List<InstallableFixture> fixtures, 
+            final AppManifest appManifestIfAny,
+            final IsisConfiguration configurationOverride,
+            final AuthenticationRequest authenticationRequestIfAny,
             final List<Listener> listeners) {
-        this.configuration = configuration;
-        this.programmingModel = programmingModel;
-        this.metaModelValidator = metaModelValidator;
-        this.persistenceMechanismInstaller = persistenceMechanismInstaller;
-        this.authenticationRequest = authenticationRequest;
-        this.services = services;
-        this.fixtures = fixtures;
+        this.appManifestIfAny = appManifestIfAny;
+        this.configurationOverride = configurationOverride;
+        this.authenticationRequestIfAny = authenticationRequestIfAny;
         this.listeners = listeners;
     }
 
-    ////////////////////////////////////////////////////////////
-    // level
-    ////////////////////////////////////////////////////////////
+    //endregion
+
+    //region > level
+    private org.apache.log4j.Level level = org.apache.log4j.Level.INFO;
 
     /**
      * The level to use for the root logger if fallback (ie a <tt>logging.properties</tt> file cannot be found).
@@ -335,217 +263,101 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
         this.level = level;
     }
 
-    ////////////////////////////////////////////////////////////
-    // setup, teardown
-    ////////////////////////////////////////////////////////////
-    
+    //endregion
+
+    //region > setup (also componentProvider)
+
+    // populated at #setupSystem
+    private IsisComponentProvider componentProvider;
 
     /**
      * Intended to be called from a test's {@link Before} method.
      */
     public IsisSystemForTest setUpSystem() throws RuntimeException {
         try {
-            setUpSystem(FireListeners.FIRE);
+            initIfRequiredThenOpenSession(FireListeners.FIRE);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
         return this;
     }
 
-    private void setUpSystem(FireListeners fireListeners) throws Exception {
+    private void initIfRequiredThenOpenSession(FireListeners fireListeners) throws Exception {
 
-        boolean firstTime = isisSystem == null;
-        if(fireListeners.shouldFire()) {
-            fireInitAndPreSetupSystem(firstTime);
+        // exit as quickly as possible for this case...
+        final MetaModelInvalidException mmie = IsisContext.getMetaModelInvalidExceptionIfAny();
+        if(mmie != null) {
+            final Set<String> validationErrors = mmie.getValidationErrors();
+            final String validationMsg = Joiner.on("\n").join(validationErrors);
+            fail(validationMsg);
+            return;
         }
-        
+
+        boolean firstTime = isisSessionFactory == null;
+        if(fireListeners.shouldFire()) {
+            fireInitAndPreOpenSession(firstTime);
+        }
+
         if(firstTime) {
             IsisLoggingConfigurer isisLoggingConfigurer = new IsisLoggingConfigurer(getLevel());
-            isisLoggingConfigurer.configureLogging(".", new String[]{});
+            isisLoggingConfigurer.configureLogging(".", new String[] {});
 
-            isisSystem = createIsisSystem(services);
+            componentProvider = new IsisComponentProviderDefault(
+                    appManifestIfAny,
+                    configurationOverride
+            );
+
+            final IsisSessionFactoryBuilder isisSessionFactoryBuilder = new IsisSessionFactoryBuilder(componentProvider, DeploymentCategory.PRODUCTION);
 
             // ensures that a FixtureClock is installed as the singleton underpinning the ClockService
             FixtureClock.initialize();
 
-            isisSystem.init();
-            IsisContext.closeSession();
+            isisSessionFactory = isisSessionFactoryBuilder.buildSessionFactory();
+            // REVIEW: does no harm, but is this required?
+            closeSession();
+
+            // if the IsisSystem does not initialize properly, then - as a side effect - the resulting
+            // MetaModelInvalidException will be pushed onto the IsisContext (as a static field).
+            final MetaModelInvalidException ex = IsisContext.getMetaModelInvalidExceptionIfAny();
+            if (ex != null) {
+
+                // for subsequent tests; the attempt to bootstrap the framework will leave
+                // the IsisContext singleton as set.
+                IsisContext.testReset();
+
+                final Set<String> validationErrors = ex.getValidationErrors();
+                final StringBuilder buf = new StringBuilder();
+                for (String validationError : validationErrors) {
+                    buf.append(validationError).append("\n");
+                }
+                fail("Metamodel is invalid: \n" + buf.toString());
+            }
         }
 
-        final AuthenticationManager authenticationManager = isisSystem.getSessionFactory().getAuthenticationManager();
-        authenticationSession = authenticationManager.authenticate(authenticationRequest);
-
-        setContainer(getContainer());
+        final AuthenticationManager authenticationManager = isisSessionFactory.getAuthenticationManager();
+        authenticationSession = authenticationManager.authenticate(authenticationRequestIfAny);
 
         openSession();
 
-        wireAndInstallFixtures();
         if(fireListeners.shouldFire()) {
-            firePostSetupSystem(firstTime);
-        }
-    }
-
-    private void wireAndInstallFixtures() {
-        FixturesInstallerDelegate fid = new FixturesInstallerDelegate(getPersistenceSession());
-        fid.addFixture(fixtures);
-        fid.installFixtures();
-    }
-
-    private enum FireListeners {
-        FIRE,
-        DONT_FIRE;
-        public boolean shouldFire() {
-            return this == FIRE;
+            firePostOpenSession(firstTime);
         }
     }
 
     public DomainObjectContainer getContainer() {
-        for (Object service : services) {
-            if(service instanceof DomainObjectContainer) {
-                return (DomainObjectContainer) service;
-            }
-        }
-        throw new IllegalStateException("Could not locate DomainObjectContainer");
+        return getService(DomainObjectContainer.class);
     }
+
+    //endregion
+
+    //region > isisSystem (populated during setup)
+    private IsisSessionFactory isisSessionFactory;
 
     /**
-     * Intended to be called from a test's {@link After} method.
+     * The {@link IsisSessionFactory} created during {@link #setUpSystem()}.
      */
-    public void tearDownSystem() throws Exception {
-        tearDownSystem(FireListeners.FIRE);
-    }
-
-    private void tearDownSystem(final FireListeners fireListeners) throws Exception {
-        if(fireListeners.shouldFire()) {
-            firePreTeardownSystem();
-        }
-        IsisContext.closeSession();
-        if(fireListeners.shouldFire()) {
-            firePostTeardownSystem();
-        }
-    }
-
-    private void shutdown() {
-        isisSystem.shutdown();
-    }
-
-    public void bounceSystem() throws Exception {
-        firePreBounceSystem();
-        closeSession();
-        openSession();
-        firePostBounceSystem();
-    }
-
-    public void openSession() throws Exception {
-        openSession(authenticationSession);
-
-    }
-
-    public void openSession(AuthenticationSession authenticationSession) throws Exception {
-        IsisContext.openSession(authenticationSession);
-    }
-
-    public void closeSession() throws Exception {
-        IsisContext.closeSession();
-    }
-
-    private IsisSystemDefault createIsisSystem(List<Object> services) {
-
-        final IsisSystemDefault system = new IsisSystemDefault(DeploymentType.UNIT_TESTING, services) {
-            @Override
-            public IsisConfiguration getConfiguration() {
-                if(IsisSystemForTest.this.configuration != null) {
-                    return IsisSystemForTest.this.configuration;
-                } else {
-                    return super.getConfiguration();
-                }
-            }
-            @Override
-            protected ProgrammingModel obtainReflectorProgrammingModel() {
-                if(IsisSystemForTest.this.programmingModel != null) {
-                    return IsisSystemForTest.this.programmingModel;
-                } else {
-                    return super.obtainReflectorProgrammingModel();
-                }
-            }
-            @Override
-            protected MetaModelValidator obtainReflectorMetaModelValidator() {
-                if(IsisSystemForTest.this.metaModelValidator != null) {
-                    return IsisSystemForTest.this.metaModelValidator;
-                } else {
-                    return super.obtainReflectorMetaModelValidator();
-                }
-            }
-            @Override
-            protected PersistenceMechanismInstaller obtainPersistenceMechanismInstaller(IsisConfiguration configuration) {
-                final PersistenceMechanismInstaller installer = IsisSystemForTest.this.persistenceMechanismInstaller;
-                configuration.injectInto(installer);
-                return installer;
-            }
-        };
-        return system;
-    }
-
-
-
-    ////////////////////////////////////////////////////////////
-    // listeners
-    ////////////////////////////////////////////////////////////
-
-    private void fireInitAndPreSetupSystem(boolean firstTime) throws Exception {
-        if(firstTime) {
-            for(Listener listener: listeners) {
-                listener.init(configuration);
-            }
-        }
-        for(Listener listener: listeners) {
-            listener.preSetupSystem(firstTime);
-        }
-    }
-
-    private void firePostSetupSystem(boolean firstTime) throws Exception {
-        for(Listener listener: listeners) {
-            listener.postSetupSystem(firstTime);
-        }
-    }
-
-    private void firePreTeardownSystem() throws Exception {
-        for(Listener listener: listeners) {
-            listener.preTeardownSystem();
-        }
-    }
-
-    private void firePostTeardownSystem() throws Exception {
-        for(Listener listener: listeners) {
-            listener.postTeardownSystem();
-        }
-    }
-
-    private void firePreBounceSystem() throws Exception {
-        for(Listener listener: listeners) {
-            listener.preBounceSystem();
-        }
-    }
-
-    private void firePostBounceSystem() throws Exception {
-        for(Listener listener: listeners) {
-            listener.postBounceSystem();
-        }
-    }
-
-    
-    ////////////////////////////////////////////////////////////
-    // properties
-    ////////////////////////////////////////////////////////////
-
-    /**
-     * The {@link IsisSystemDefault} created during {@link #setUpSystem()}.
-     *
-     * <p>
-     * Can fine-tune the actual implementation using the hook {@link #createIsisSystem(List)}.
-     */
-    public IsisSystemDefault getIsisSystem() {
-        return isisSystem;
+    public IsisSessionFactory getIsisSessionFactory() {
+        return isisSessionFactory;
     }
 
     /**
@@ -555,81 +367,103 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
         return authenticationSession;
     }
 
+    //endregion
 
+    //region > teardown
 
-    ////////////////////////////////////////////////////////////
-    // Convenience for tests
-    ////////////////////////////////////////////////////////////
-
-    public ObjectSpecification loadSpecification(Class<?> cls) {
-        return getIsisSystem().getSessionFactory().getSpecificationLoader().loadSpecification(cls);
-    }
-
-    public ObjectAdapter persist(Object domainObject) {
-        ensureSessionInProgress();
-        ensureObjectIsNotPersistent(domainObject);
-        getContainer().persist(domainObject);
-        return adapterFor(domainObject);
-    }
-
-    public ObjectAdapter destroy(Object domainObject ) {
-        ensureSessionInProgress();
-        ensureObjectIsPersistent(domainObject);
-        getContainer().remove(domainObject);
-        return adapterFor(domainObject);
-    }
-
-    public ObjectAdapter adapterFor(Object domainObject) {
-        ensureSessionInProgress();
-        return getAdapterManager().adapterFor(domainObject);
-    }
-
-    public ObjectAdapter reload(RootOid oid) {
-        ensureSessionInProgress();
-        final PersistenceSession persistenceSession = getPersistenceSession();
-        return persistenceSession.loadObject(oid);
-    }
-
-    public ObjectAdapter recreateAdapter(RootOid oid) {
-        ensureSessionInProgress();
-        return getAdapterManager().adapterFor(oid);
-    }
-
-    public ObjectAdapter remapAsPersistent(Object pojo, RootOid persistentOid) {
-        ensureSessionInProgress();
-        ensureObjectIsNotPersistent(pojo);
-        final ObjectAdapter adapter = adapterFor(pojo);
-        getPersistenceSession().getAdapterManager().remapAsPersistent(adapter, persistentOid);
-        return adapter;
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T extends ObjectStore> T getObjectStore(Class<T> cls) {
-        final PersistenceSession persistenceSession = getPersistenceSession();
-        return (T) persistenceSession.getObjectStore();
-    }
-
-    private static void ensureSessionInProgress() {
-        if(!IsisContext.inSession()) {
-            throw new IllegalStateException("Session must be in progress");
+    private void closeSession(final FireListeners fireListeners) throws Exception {
+        if(fireListeners.shouldFire()) {
+            firePreCloseSession();
+        }
+        if(isisSessionFactory.inSession()) {
+            isisSessionFactory.closeSession();
+        }
+        if(fireListeners.shouldFire()) {
+            firePostCloseSession();
         }
     }
 
-    private void ensureObjectIsNotPersistent(Object domainObject) {
-        if(getContainer().isPersistent(domainObject)) {
-            throw new IllegalArgumentException("domain object is already persistent");
+    public void nextSession() throws Exception {
+        firePreNextSession();
+        closeSession();
+        openSession();
+        firePostNextSession();
+    }
+
+    //endregion
+
+    //region > openSession, closeSession
+    public void openSession() throws Exception {
+        openSession(authenticationSession);
+
+    }
+
+    public void openSession(AuthenticationSession authenticationSession) throws Exception {
+        isisSessionFactory.openSession(authenticationSession);
+    }
+
+    public void closeSession() throws Exception {
+        closeSession(FireListeners.FIRE);
+    }
+
+    //endregion
+
+    //region > listeners
+
+    private List <Listener> listeners;
+
+    private enum FireListeners {
+        FIRE,
+        DONT_FIRE;
+        public boolean shouldFire() {
+            return this == FIRE;
         }
     }
 
-    private void ensureObjectIsPersistent(Object domainObject) {
-        if(!getContainer().isPersistent(domainObject)) {
-            throw new IllegalArgumentException("domain object is not persistent");
+
+    private void fireInitAndPreOpenSession(boolean firstTime) throws Exception {
+        if(firstTime) {
+            for(Listener listener: listeners) {
+                listener.init(componentProvider.getConfiguration());
+            }
+        }
+        for(Listener listener: listeners) {
+            listener.preOpenSession(firstTime);
         }
     }
 
-    ////////////////////////////////////////////////////////////
-    // JUnit @Rule integration
-    ////////////////////////////////////////////////////////////
+    private void firePostOpenSession(boolean firstTime) throws Exception {
+        for(Listener listener: listeners) {
+            listener.postOpenSession(firstTime);
+        }
+    }
+
+    private void firePreCloseSession() throws Exception {
+        for(Listener listener: listeners) {
+            listener.preCloseSession();
+        }
+    }
+
+    private void firePostCloseSession() throws Exception {
+        for(Listener listener: listeners) {
+            listener.postCloseSession();
+        }
+    }
+
+    private void firePreNextSession() throws Exception {
+        for(Listener listener: listeners) {
+            listener.preNextSession();
+        }
+    }
+
+    private void firePostNextSession() throws Exception {
+        for(Listener listener: listeners) {
+            listener.postNextSession();
+        }
+    }
+    //endregion
+
+    //region > JUnit @Rule integration
 
     @Override
     public Statement apply(final Statement base, final Description description) {
@@ -639,10 +473,10 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
                 setUpSystem();
                 try {
                     base.evaluate();
-                    tearDownSystem();
+                    closeSession();
                 } catch(Throwable ex) {
                     try {
-                        tearDownSystem();
+                        closeSession();
                     } catch(Exception ex2) {
                         // ignore, since already one pending
                     }
@@ -652,16 +486,22 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
         };
     }
 
+    //endregion
 
-    
+    //region > beginTran, endTran, commitTran, abortTran
+
+    /**
+     * @deprecated - ought to be using regular domain services rather than reaching into the framework
+     */
+    @Deprecated
     public void beginTran() {
         final IsisTransactionManager transactionManager = getTransactionManager();
-        final IsisTransaction transaction = transactionManager.getTransaction();
+        final IsisTransaction transaction = transactionManager.getCurrentTransaction();
 
         if(transaction == null) {
             startTransactionForUser(transactionManager);
             return;
-        } 
+        }
 
         final State state = transaction.getState();
         switch(state) {
@@ -673,12 +513,12 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
                 // nothing to do
                 break;
             case MUST_ABORT:
-                Assert.fail("Transaction is in state of '" + state + "'");
+                fail("Transaction is in state of '" + state + "'");
                 break;
             default:
-                Assert.fail("Unknown transaction state '" + state + "'");
+                fail("Unknown transaction state '" + state + "'");
         }
-        
+
     }
 
     private void startTransactionForUser(IsisTransactionManager transactionManager) {
@@ -686,21 +526,21 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
 
         // specify that this command (if any) is being executed by a 'USER'
         final CommandContext commandContext = getService(CommandContext.class);
-        Command command;
-        if (commandContext != null) {
-            command = commandContext.getCommand();
-            command.setExecutor(Command.Executor.USER);
-        }
+        Command command = commandContext.getCommand();
+        command.setExecutor(Command.Executor.USER);
     }
 
     /**
      * Either commits or aborts the transaction, depending on the Transaction's {@link org.apache.isis.core.runtime.system.transaction.IsisTransaction#getState()}
+     *
+     * @deprecated - ought to be using regular domain services rather than reaching into the framework
      */
+    @Deprecated
     public void endTran() {
         final IsisTransactionManager transactionManager = getTransactionManager();
-        final IsisTransaction transaction = transactionManager.getTransaction();
+        final IsisTransaction transaction = transactionManager.getCurrentTransaction();
         if(transaction == null) {
-            Assert.fail("No transaction exists");
+            fail("No transaction exists");
             return;
         }
 
@@ -713,73 +553,76 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
             case ABORTED:
                 break;
             case IN_PROGRESS:
-                Assert.fail("Transaction is still in state of '" + state + "'");
+                fail("Transaction is still in state of '" + state + "'");
                 break;
             case MUST_ABORT:
-                Assert.fail("Transaction is still in state of '" + state + "'");
+                fail("Transaction is still in state of '" + state + "'");
                 break;
             default:
-                Assert.fail("Unknown transaction state '" + state + "'");
-        }
-    }
-
-    /**
-     * Commits the transaction.
-     * 
-     * @deprecated - typically use just {@link #endTran()}
-     */
-    @Deprecated
-    public void commitTran() {
-        final IsisTransactionManager transactionManager = getTransactionManager();
-        final IsisTransaction transaction = transactionManager.getTransaction();
-        if(transaction == null) {
-            Assert.fail("No transaction exists");
-            return;
-        } 
-        final State state = transaction.getState();
-        switch(state) {
-            case COMMITTED:
-            case ABORTED:
-            case MUST_ABORT:
-                Assert.fail("Transaction is in state of '" + state + "'");
-                break;
-            case IN_PROGRESS:
-                transactionManager.endTransaction();
-                break;
-            default:
-                Assert.fail("Unknown transaction state '" + state + "'");
+                fail("Unknown transaction state '" + state + "'");
         }
     }
 
     /**
      * Commits the transaction.
      *
-     * @deprecated - typically use just {@link #abortTran()}
+     * @deprecated - ought to be using regular domain services rather than reaching into the framework
+     */
+    @Deprecated
+    public void commitTran() {
+        final IsisTransactionManager transactionManager = getTransactionManager();
+        final IsisTransaction transaction = transactionManager.getCurrentTransaction();
+        if(transaction == null) {
+            fail("No transaction exists");
+            return;
+        }
+        final State state = transaction.getState();
+        switch(state) {
+            case COMMITTED:
+            case ABORTED:
+            case MUST_ABORT:
+                fail("Transaction is in state of '" + state + "'");
+                break;
+            case IN_PROGRESS:
+                transactionManager.endTransaction();
+                break;
+            default:
+                fail("Unknown transaction state '" + state + "'");
+        }
+    }
+
+    /**
+     * Aborts the transaction.
+     *
+     * @deprecated - ought to be using regular domain services rather than reaching into the framework
      */
     @Deprecated
     public void abortTran() {
         final IsisTransactionManager transactionManager = getTransactionManager();
-        final IsisTransaction transaction = transactionManager.getTransaction();
+        final IsisTransaction transaction = transactionManager.getCurrentTransaction();
         if(transaction == null) {
-            Assert.fail("No transaction exists");
+            fail("No transaction exists");
             return;
-        } 
+        }
         final State state = transaction.getState();
         switch(state) {
             case ABORTED:
                 break;
             case COMMITTED:
-                Assert.fail("Transaction is in state of '" + state + "'");
+                fail("Transaction is in state of '" + state + "'");
                 break;
             case MUST_ABORT:
             case IN_PROGRESS:
                 transactionManager.abortTransaction();
                 break;
             default:
-                Assert.fail("Unknown transaction state '" + state + "'");
+                fail("Unknown transaction state '" + state + "'");
         }
     }
 
+    //endregion
+
+    //region > getService, replaceService
 
     /* (non-Javadoc)
      * @see org.apache.isis.core.integtestsupport.ServiceProvider#getService(java.lang.Class)
@@ -787,45 +630,39 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
     @Override
     @SuppressWarnings("unchecked")
     public <T> T getService(Class<T> serviceClass) {
-        if(serviceClass == DomainObjectContainer.class) {
-            return (T) getContainer();
-        }
-        final ServicesInjectorSpi servicesInjector = getPersistenceSession().getServicesInjector();
-        final T service = servicesInjector.lookupService(serviceClass);
-        if(service == null) {
-            throw new RuntimeException("Could not find a service of type: " + serviceClass.getName());
-        }
-        return service;
+        final ServicesInjector servicesInjector = isisSessionFactory.getServicesInjector();
+        return servicesInjector.lookupServiceElseFail(serviceClass);
     }
 
     @Override
     public <T> void replaceService(final T originalService, final T replacementService) {
-        final ServicesInjectorSpi servicesInjector = getPersistenceSession().getServicesInjector();
+        final ServicesInjector servicesInjector = isisSessionFactory.getServicesInjector();
         servicesInjector.replaceService(originalService, replacementService);
     }
 
+    //endregion
 
-    ////////////////////////////////////////////////////////////
-    // Fixture management 
-    // (for each test, rather than at bootstrap)
-    ////////////////////////////////////////////////////////////
+    //region > Fixture management (for each test, rather than at bootstrap)
 
-    
+    /**
+     * @deprecated - use {@link org.apache.isis.applib.fixturescripts.FixtureScripts} domain service instead.
+     */
+    @Deprecated
     public void installFixtures(final InstallableFixture... fixtures) {
-        final FixturesInstallerDelegate fid = new FixturesInstallerDelegate(getPersistenceSession());
-        for (InstallableFixture fixture : fixtures) {
+        final FixturesInstallerDelegate fid = new FixturesInstallerDelegate(isisSessionFactory);
+        for (final InstallableFixture fixture : fixtures) {
             fid.addFixture(fixture);
         }
         fid.installFixtures();
 
         // ensure that tests are performed in separate xactn to any fixture setup.
         final IsisTransactionManager transactionManager = getTransactionManager();
-        final IsisTransaction transaction = transactionManager.getTransaction();
+        final IsisTransaction transaction = transactionManager.getCurrentTransaction();
         final State transactionState = transaction.getState();
         if(transactionState.canCommit()) {
             commitTran();
             try {
-                bounceSystem();
+                nextSession();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -833,33 +670,18 @@ public class IsisSystemForTest implements org.junit.rules.TestRule, DomainServic
         }
     }
 
+    //endregion
 
-    ////////////////////////////////////////////////////////////
-    // Dependencies
-    ////////////////////////////////////////////////////////////
-    
-    protected IsisTransactionManager getTransactionManager() {
+    //region > Dependencies
+
+    private IsisTransactionManager getTransactionManager() {
         return getPersistenceSession().getTransactionManager();
     }
     
-    public PersistenceSession getPersistor() {
-    	return getPersistenceSession();
-    }
-    
-    public AdapterManager getAdapterManager() {
-        return getPersistor().getAdapterManager();
+    private PersistenceSession getPersistenceSession() {
+        return isisSessionFactory.getCurrentSession().getPersistenceSession();
     }
 
-    protected PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
-    }
+    //endregion
 
-    /**
-     * @param container the container to set
-     */
-    public void setContainer(DomainObjectContainer container) {
-        this.container = container;
-    }
-
-    
 }

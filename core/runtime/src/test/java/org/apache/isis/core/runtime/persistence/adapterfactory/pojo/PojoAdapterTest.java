@@ -19,9 +19,6 @@
 
 package org.apache.isis.core.runtime.persistence.adapterfactory.pojo;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
-
 import java.util.Date;
 
 import org.jmock.Expectations;
@@ -30,20 +27,21 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.ResolveState;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.oid.RootOidDefault;
+import org.apache.isis.core.metamodel.adapter.oid.RootOid;
 import org.apache.isis.core.metamodel.adapter.version.ConcurrencyException;
 import org.apache.isis.core.metamodel.adapter.version.Version;
 import org.apache.isis.core.metamodel.spec.ObjectSpecId;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.runtime.persistence.adapter.PojoAdapter;
 import org.apache.isis.core.runtime.persistence.objectstore.transaction.PojoAdapterBuilder;
+import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2.Mode;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 
 public class PojoAdapterTest {
 
@@ -58,19 +56,18 @@ public class PojoAdapterTest {
     @Mock
     private Version mockVersion2;
     @Mock
-    private SpecificationLoaderSpi mockSpecificationLoader;
+    private SpecificationLoader mockSpecificationLoader;
     @Mock
     private AuthenticationSession mockAuthenticationSession;
     @Mock
-    private AdapterManager mockObjectAdapterLookup;
-    @Mock
-    private Localization mockLocalization;
-    
+    private PersistenceSession mockPersistenceSession;
+
     @Before
     public void setUp() throws Exception {
         domainObject = new RuntimeTestPojo();
         
-        adapter = new PojoAdapter(domainObject, RootOidDefault.create(ObjectSpecId.of("CUS"), "1"), mockSpecificationLoader, mockObjectAdapterLookup, mockLocalization, mockAuthenticationSession);
+        adapter = new PojoAdapter(domainObject, RootOid.create(ObjectSpecId.of("CUS"), "1"), mockAuthenticationSession,
+                mockSpecificationLoader, mockPersistenceSession);
         adapter.setVersion(mockVersion);
         
         allowUnimportantMethodCallsOn(mockVersion);
@@ -96,23 +93,12 @@ public class PojoAdapterTest {
 
     @Test
     public void getOid_initially() {
-        assertEquals(RootOidDefault.create(ObjectSpecId.of("CUS"), "1"), adapter.getOid());
+        assertEquals(RootOid.create(ObjectSpecId.of("CUS"), "1"), adapter.getOid());
     }
 
     @Test
     public void getObject_initially() {
         assertEquals(domainObject, adapter.getObject());
-    }
-
-    @Test
-    public void getResolveState_initially() {
-        assertEquals(ResolveState.NEW, adapter.getResolveState());
-    }
-
-    @Test
-    public void changeState_newToTransient() {
-        adapter.changeState(ResolveState.TRANSIENT);
-        assertEquals(ResolveState.TRANSIENT, adapter.getResolveState());
     }
 
     @Test
@@ -125,7 +111,7 @@ public class PojoAdapterTest {
 
         context.checking(new Expectations() {
             {
-                one(mockVersion).different(mockVersion2);
+                oneOf(mockVersion).different(mockVersion2);
                 will(returnValue(false));
             }
         });
@@ -140,7 +126,7 @@ public class PojoAdapterTest {
         
         context.checking(new Expectations() {
             {
-                one(mockVersion).different(mockVersion2);
+                oneOf(mockVersion).different(mockVersion2);
                 will(returnValue(true));
             }
         });

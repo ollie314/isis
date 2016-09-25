@@ -20,11 +20,13 @@ import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
 import org.apache.isis.core.metamodel.adapter.oid.RootOid;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.runtime.system.context.IsisContext;
 import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
 import org.apache.isis.core.runtime.system.session.IsisSession;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 import org.apache.isis.core.runtime.system.transaction.IsisTransactionManager;
-import org.apache.isis.core.runtime.system.transaction.TransactionalClosureAbstract;
+import org.apache.isis.core.runtime.system.transaction.TransactionalClosure;
 
 public abstract class AbstractIsisSessionTemplate {
 
@@ -33,15 +35,14 @@ public abstract class AbstractIsisSessionTemplate {
      */
     public void execute(final AuthenticationSession authSession, final Object context) {
         try {
-            IsisContext.openSession(authSession);
+            getIsisSessionFactory().openSession(authSession);
             PersistenceSession persistenceSession = getPersistenceSession();
             persistenceSession.getServicesInjector().injectServicesInto(this);
             doExecute(context);
         } finally {
-            IsisContext.closeSession();
+            getIsisSessionFactory().closeSession();
         }
     }
-
 
     // //////////////////////////////////////
     
@@ -59,7 +60,7 @@ public abstract class AbstractIsisSessionTemplate {
     protected void doExecute(final Object context) {
         final PersistenceSession persistenceSession = getPersistenceSession();
         final IsisTransactionManager transactionManager = getTransactionManager(persistenceSession);
-        transactionManager.executeWithinTransaction(new TransactionalClosureAbstract() {
+        transactionManager.executeWithinTransaction(new TransactionalClosure() {
             @Override
             public void execute() {
                 doExecuteWithTransaction(context);
@@ -81,24 +82,29 @@ public abstract class AbstractIsisSessionTemplate {
     // //////////////////////////////////////
 
     protected ObjectAdapter adapterFor(final Object targetObject) {
-        return getAdapterManager().adapterFor(targetObject);
+        return getPersistenceSession().adapterFor(targetObject);
     }
     protected ObjectAdapter adapterFor(final RootOid rootOid) {
-        return getAdapterManager().adapterFor(rootOid);
+        return getPersistenceSession().adapterFor(rootOid);
     }
     
     // //////////////////////////////////////
-    
+
+
+    protected IsisSessionFactory getIsisSessionFactory() {
+        return IsisContext.getSessionFactory();
+    }
+
     protected PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
+        return getIsisSessionFactory().getCurrentSession().getPersistenceSession();
     }
 
     protected IsisTransactionManager getTransactionManager(PersistenceSession persistenceSession) {
         return persistenceSession.getTransactionManager();
     }
 
-    protected AdapterManager getAdapterManager() {
-        return getPersistenceSession().getAdapterManager();
+    protected SpecificationLoader getSpecificationLoader() {
+        return getIsisSessionFactory().getSpecificationLoader();
     }
 
 

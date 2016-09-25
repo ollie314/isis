@@ -19,6 +19,8 @@
 
 package org.apache.isis.core.metamodel.spec.feature;
 
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -31,13 +33,18 @@ import com.google.common.collect.Maps;
 import org.apache.isis.applib.annotation.When;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.filter.Filter;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.facetapi.Facet;
+import org.apache.isis.core.metamodel.facets.WhenAndWhereValueFacet;
 import org.apache.isis.core.metamodel.facets.all.hide.HiddenFacet;
 import org.apache.isis.core.metamodel.facets.members.order.MemberOrderFacet;
+import org.apache.isis.core.metamodel.facets.object.membergroups.MemberGroupLayoutFacet;
 import org.apache.isis.core.metamodel.facets.object.value.ValueFacet;
+import org.apache.isis.core.metamodel.layout.memberorderfacet.MemberOrderComparator;
 import org.apache.isis.core.metamodel.specloader.specimpl.ContributeeMember;
+import org.apache.isis.core.metamodel.util.DeweyOrderComparator;
 
 /**
  * Provides reflective access to a field on a domain object.
@@ -45,9 +52,19 @@ import org.apache.isis.core.metamodel.specloader.specimpl.ContributeeMember;
 public interface ObjectAssociation extends ObjectMember, CurrentHolder {
 
     /**
-     * Get the name for the business key, if one has been specified.
+     * As per {@link #get(ObjectAdapter, InteractionInitiatedBy)}, with {@link InteractionInitiatedBy#USER}.
      */
-    String getBusinessKeyName();
+    ObjectAdapter get(final ObjectAdapter owner);
+
+    /**
+     * Returns the referenced {@link ObjectAdapter} for the owning
+     * {@link ObjectAdapter}.
+     *
+     * <p>
+     * For example, if this is an {@link OneToOneAssociation}, then returns the
+     * referenced object.
+     */
+    ObjectAdapter get(final ObjectAdapter owner, final InteractionInitiatedBy interactionInitiatedBy);
 
     /**
      * Return the default for this property.
@@ -68,7 +85,9 @@ public interface ObjectAssociation extends ObjectMember, CurrentHolder {
      * Returns a list of possible references/values for this field, which the
      * user can choose from.
      */
-    public ObjectAdapter[] getChoices(ObjectAdapter object);
+    public ObjectAdapter[] getChoices(
+            final ObjectAdapter object,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
 
     /**
@@ -80,7 +99,10 @@ public interface ObjectAssociation extends ObjectMember, CurrentHolder {
      * Returns a list of possible references/values for this field, which the
      * user can choose from, based on the provided search argument.
      */
-    public ObjectAdapter[] getAutoComplete(ObjectAdapter object, String searchArg);
+    public ObjectAdapter[] getAutoComplete(
+            final ObjectAdapter object,
+            final String searchArg,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     int getAutoCompleteMinLength();
 
@@ -94,7 +116,7 @@ public interface ObjectAssociation extends ObjectMember, CurrentHolder {
      * Returns <code>true</code> if this field on the specified object is deemed
      * to be empty, or has no content.
      */
-    boolean isEmpty(ObjectAdapter target);
+    boolean isEmpty(ObjectAdapter target, final InteractionInitiatedBy interactionInitiatedBy);
 
     /**
      * Determines if this field must be complete before the object is in a valid
@@ -193,12 +215,22 @@ public interface ObjectAssociation extends ObjectMember, CurrentHolder {
             return org.apache.isis.applib.filter.Filters.asPredicate(Filters.staticallyVisible(context));
         }
 
-        public static final Predicate<ObjectAssociation> dynamicallyVisible(final AuthenticationSession session, final ObjectAdapter target, final Where where) {
-            return org.apache.isis.applib.filter.Filters.asPredicate(Filters.dynamicallyVisible(session, target, where));
+        public static final Predicate<ObjectAssociation> dynamicallyVisible(
+                final ObjectAdapter target,
+                final InteractionInitiatedBy interactionInitiatedBy,
+                final Where where) {
+            return org.apache.isis.applib.filter.Filters.asPredicate(Filters.dynamicallyVisible(target,
+                    interactionInitiatedBy, where
+            ));
         }
 
-        public static final Predicate<ObjectAssociation> enabled(final AuthenticationSession session, final ObjectAdapter adapter, final Where where) {
-            return org.apache.isis.applib.filter.Filters.asPredicate(Filters.enabled(session, adapter, where));
+        public static final Predicate<ObjectAssociation> enabled(
+                final ObjectAdapter adapter,
+                final InteractionInitiatedBy interactionInitiatedBy,
+                final Where where) {
+            return org.apache.isis.applib.filter.Filters.asPredicate(Filters.enabled(adapter,
+                    interactionInitiatedBy, where
+            ));
         }
 
     }
@@ -316,11 +348,18 @@ public interface ObjectAssociation extends ObjectMember, CurrentHolder {
             return new Filter<ObjectAssociation>() {
                 @Override
                 public boolean accept(final ObjectAssociation association) {
-                    final HiddenFacet facet = association.getFacet(HiddenFacet.class);
-                    if(facet == null) {
-                        return true;
+                    final List<Facet> facets = association.getFacets(new Filter<Facet>() {
+                        @Override public boolean accept(final Facet facet) {
+                            return facet instanceof WhenAndWhereValueFacet && facet instanceof HiddenFacet;
+                        }
+                    });
+                    for (Facet facet : facets) {
+                        final WhenAndWhereValueFacet wawF = (WhenAndWhereValueFacet) facet;
+                        if (wawF.where().includes(context) && wawF.when() == When.ALWAYS) {
+                            return false;
+                        }
                     }
-                    return !(facet.where().includes(context) && facet.when() == When.ALWAYS);
+                    return true;
                 }
             };
         }
@@ -329,11 +368,14 @@ public interface ObjectAssociation extends ObjectMember, CurrentHolder {
          * @deprecated -use {@link com.google.common.base.Predicate equivalent}
          */
         @Deprecated
-        public static Filter<ObjectAssociation> dynamicallyVisible(final AuthenticationSession session, final ObjectAdapter target, final Where where) {
+        public static Filter<ObjectAssociation> dynamicallyVisible(
+                final ObjectAdapter target,
+                final InteractionInitiatedBy interactionInitiatedBy,
+                final Where where) {
             return new Filter<ObjectAssociation>() {
                 @Override
                 public boolean accept(final ObjectAssociation objectAssociation) {
-                    final Consent visible = objectAssociation.isVisible(session, target, where);
+                    final Consent visible = objectAssociation.isVisible(target, interactionInitiatedBy, where);
                     return visible.isAllowed();
                 }
             };
@@ -343,12 +385,40 @@ public interface ObjectAssociation extends ObjectMember, CurrentHolder {
          * @deprecated -use {@link com.google.common.base.Predicate equivalent}
          */
         @Deprecated
-        public static Filter<ObjectAssociation> enabled(final AuthenticationSession session, final ObjectAdapter adapter, final Where where) {
+        public static Filter<ObjectAssociation> enabled(
+                final ObjectAdapter adapter,
+                final InteractionInitiatedBy interactionInitiatedBy,
+                final Where where) {
             return new Filter<ObjectAssociation>() {
                 @Override
                 public boolean accept(final ObjectAssociation objectAssociation) {
-                    final Consent usable = objectAssociation.isUsable(session, adapter, where);
+                    final Consent usable = objectAssociation.isUsable(adapter, interactionInitiatedBy, where);
                     return usable.isAllowed();
+                }
+            };
+        }
+
+    }
+
+    // //////////////////////////////////////////////////////
+    // Comparators
+    // //////////////////////////////////////////////////////
+
+    public static class Comparators {
+        /**
+         * Use {@link ObjectMember.Comparators#byMemberOrderSequence()} instead.
+         */
+        @Deprecated
+        public static Comparator<ObjectAssociation> byMemberOrderSequence() {
+            return new Comparator<ObjectAssociation>() {
+                private final DeweyOrderComparator deweyOrderComparator = new DeweyOrderComparator();
+                @Override
+                public int compare(final ObjectAssociation o1, final ObjectAssociation o2) {
+                    final MemberOrderFacet o1Facet = o1.getFacet(MemberOrderFacet.class);
+                    final MemberOrderFacet o2Facet = o2.getFacet(MemberOrderFacet.class);
+                    return o1Facet == null? +1:
+                            o2Facet == null? -1:
+                                    deweyOrderComparator.compare(o1Facet.sequence(), o2Facet.sequence());
                 }
             };
         }
@@ -362,24 +432,30 @@ public interface ObjectAssociation extends ObjectMember, CurrentHolder {
     public static class Util {
         private Util(){}
         
-        public static Map<String, List<ObjectAssociation>> groupByMemberOrderName(List<ObjectAssociation> associations) {
+        public static Map<String, List<ObjectAssociation>> groupByMemberOrderName(
+                final List<ObjectAssociation> associations) {
             Map<String, List<ObjectAssociation>> associationsByGroup = Maps.newHashMap();
             for(ObjectAssociation association: associations) {
                 addAssociationIntoGroup(associationsByGroup, association);
             }
+            for (Map.Entry<String, List<ObjectAssociation>> objectAssociations : associationsByGroup.entrySet()) {
+                Collections.sort(objectAssociations.getValue(), new MemberOrderComparator(true));
+            }
             return associationsByGroup;
         }
 
-        private static void addAssociationIntoGroup(Map<String, List<ObjectAssociation>> associationsByGroup, ObjectAssociation association) {
+        private static void addAssociationIntoGroup(
+                final Map<String, List<ObjectAssociation>> associationsByGroup,
+                final ObjectAssociation association) {
             final MemberOrderFacet memberOrderFacet = association.getFacet(MemberOrderFacet.class);
             if(memberOrderFacet != null) {
-                final String name = memberOrderFacet.name();
-                if(!Strings.isNullOrEmpty(name)) {
-                    getFrom(associationsByGroup, name).add(association);
+                final String untranslatedName = memberOrderFacet.untranslatedName();
+                if(!Strings.isNullOrEmpty(untranslatedName)) {
+                    getFrom(associationsByGroup, untranslatedName).add(association);
                     return;
                 }
             }
-            getFrom(associationsByGroup, "General").add(association);
+            getFrom(associationsByGroup, MemberGroupLayoutFacet.DEFAULT_GROUP).add(association);
         }
 
         private static List<ObjectAssociation> getFrom(Map<String, List<ObjectAssociation>> associationsByGroup, final String groupName) {

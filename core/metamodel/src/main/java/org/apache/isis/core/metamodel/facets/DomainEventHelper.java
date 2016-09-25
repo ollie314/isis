@@ -21,6 +21,7 @@ package org.apache.isis.core.metamodel.facets;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -41,7 +42,7 @@ import org.apache.isis.applib.services.eventbus.EventBusService;
 import org.apache.isis.applib.services.eventbus.PropertyDomainEvent;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.facetapi.IdentifiedHolder;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.core.metamodel.spec.feature.ObjectActionParameter;
 
@@ -60,15 +61,14 @@ public class DomainEventHelper {
             final AbstractDomainEvent.Phase phase,
             final Class eventType,
             final ActionDomainEvent<?> existingEvent,
+            final ObjectAction objectAction,
             final IdentifiedHolder identified,
             final ObjectAdapter targetAdapter,
+            final ObjectAdapter mixedInAdapter,
             final ObjectAdapter[] argumentAdapters,
             final Command command,
             final ObjectAdapter resultAdapter) {
 
-        if(!hasEventBusService()) {
-            return null;
-        }
         try {
             final ActionDomainEvent<?> event;
 
@@ -82,9 +82,13 @@ public class DomainEventHelper {
                 final Identifier identifier = identified.getIdentifier();
                 event = newActionDomainEvent(eventType, identifier, source, arguments);
 
-                if(identified instanceof ObjectAction) {
+                // copy over if have
+                if(mixedInAdapter != null ) {
+                    event.setMixedIn(mixedInAdapter.getObject());
+                }
+
+                if(objectAction != null) {
                     // should always be the case...
-                    final ObjectAction objectAction = (ObjectAction) identified;
                     event.setActionSemantics(objectAction.getSemantics());
 
                     final List<ObjectActionParameter> parameters = objectAction.getParameters();
@@ -135,7 +139,24 @@ public class DomainEventHelper {
             final Identifier identifier,
             final S source,
             final Object... arguments) throws InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
+
         final Constructor<?>[] constructors = type.getConstructors();
+
+        // no-arg constructor
+        for (final Constructor<?> constructor : constructors) {
+            final Class<?>[] parameterTypes = constructor.getParameterTypes();
+            if(parameterTypes.length == 0) {
+                final Object event = constructor.newInstance();
+                final ActionDomainEvent<S> ade = (ActionDomainEvent<S>) event;
+
+                ade.setSource(source);
+                ade.setIdentifier(identifier);
+                ade.setArguments(asList(arguments));
+                return ade;
+            }
+        }
+
+
         for (final Constructor<?> constructor : constructors) {
             final Class<?>[] parameterTypes = constructor.getParameterTypes();
             if(parameterTypes.length != 3) {
@@ -155,6 +176,13 @@ public class DomainEventHelper {
         }
         throw new NoSuchMethodException(type.getName()+".<init>(? super " + source.getClass().getName() + ", " + Identifier.class.getName() + ", [Ljava.lang.Object;)");
     }
+
+    // same as in ActionDomainEvent's constructor.
+    private static List<Object> asList(final Object[] arguments) {
+        return arguments != null
+                ? Arrays.asList(arguments)
+                : Collections.emptyList();
+    }
     //endregion
 
     //region > postEventForProperty, newPropertyInteraction
@@ -167,9 +195,6 @@ public class DomainEventHelper {
             final Object oldValue,
             final Object newValue) {
 
-        if(!hasEventBusService()) {
-            return null;
-        }
         try {
             final PropertyDomainEvent<?, ?> event;
             final Object source = ObjectAdapter.Util.unwrap(targetAdapter);
@@ -209,6 +234,22 @@ public class DomainEventHelper {
             final T newValue) throws NoSuchMethodException, SecurityException, InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException  {
 
         final Constructor<?>[] constructors = type.getConstructors();
+
+        // no-arg constructor
+        for (final Constructor<?> constructor : constructors) {
+            final Class<?>[] parameterTypes = constructor.getParameterTypes();
+            if(parameterTypes.length == 0) {
+                final Object event = constructor.newInstance();
+                final PropertyDomainEvent<S, T> pde = (PropertyDomainEvent<S, T>) event;
+                pde.setSource(source);
+                pde.setIdentifier(identifier);
+                pde.setOldValue(oldValue);
+                pde.setNewValue(newValue);
+                return pde;
+            }
+        }
+
+        // else
         for (final Constructor<?> constructor : constructors) {
             final Class<?>[] parameterTypes = constructor.getParameterTypes();
             if(parameterTypes.length != 4) {
@@ -244,9 +285,6 @@ public class DomainEventHelper {
             final ObjectAdapter targetAdapter,
             final CollectionDomainEvent.Of of,
             final Object reference) {
-        if(!hasEventBusService()) {
-            return null;
-        }
         try {
             final CollectionDomainEvent<?, ?> event;
             if (existingEvent != null && phase.isExecuted()) {
@@ -281,6 +319,21 @@ public class DomainEventHelper {
             IllegalAccessException, IllegalArgumentException, InvocationTargetException {
 
         final Constructor<?>[] constructors = type.getConstructors();
+
+        // no-arg constructor
+        for (final Constructor<?> constructor : constructors) {
+            final Class<?>[] parameterTypes = constructor.getParameterTypes();
+            if(parameterTypes.length ==0) {
+                final Object event = constructor.newInstance();
+                final CollectionDomainEvent<S, T> cde = (CollectionDomainEvent<S, T>) event;
+
+                cde.setSource(source);
+                cde.setIdentifier(identifier);
+                cde.setOf(of);
+                cde.setValue(value);
+                return cde;
+            }
+        }
 
         // search for constructor accepting source, identifier, type, value
         for (final Constructor<?> constructor : constructors) {
@@ -356,22 +409,10 @@ public class DomainEventHelper {
 
     //region > eventBusService
 
-    private EventBusService eventBusService;
-    private boolean searchedForEventBusService = false;
-
-    public boolean hasEventBusService() {
-        return getEventBusService() != null;
-    }
-
     private EventBusService getEventBusService() {
-        if (!searchedForEventBusService) {
-            eventBusService = this.servicesInjector.lookupService(EventBusService.class);
-        }
-        // this caching has been disabled, because it prevents integration tests from switching out the
-        // EventBusService with a mock.
-        // perhaps a better appraoch
-        //searchedForEventBusService = true;
-        return eventBusService;
+        // previously this method used to cache, however it prevents integration tests
+        // from switching out the EventBusService with a mock.
+        return this.servicesInjector.lookupService(EventBusService.class);
     }
 
     //endregion

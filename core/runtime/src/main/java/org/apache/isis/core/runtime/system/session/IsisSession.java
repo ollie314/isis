@@ -19,12 +19,15 @@
 
 package org.apache.isis.core.runtime.system.session;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
-import org.apache.isis.core.commons.components.ApplicationScopedComponent;
 import org.apache.isis.core.commons.components.SessionScopedComponent;
-import org.apache.isis.core.commons.debug.DebugBuilder;
+import org.apache.isis.core.commons.util.ToString;
 import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
 import org.apache.isis.core.runtime.system.transaction.IsisTransaction;
+import org.apache.isis.core.runtime.system.transaction.IsisTransactionManager;
 
 /**
  * Analogous to (and in essence a wrapper for) a JDO <code>PersistenceManager</code>;
@@ -35,70 +38,89 @@ import org.apache.isis.core.runtime.system.transaction.IsisTransaction;
  * 
  * @see IsisSessionFactory
  */
-public interface IsisSession extends SessionScopedComponent {
+public class IsisSession implements SessionScopedComponent {
 
-    // //////////////////////////////////////////////////////
-    // closeAll
-    // //////////////////////////////////////////////////////
+    private static final Logger LOG = LoggerFactory.getLogger(IsisSession.class);
+
+    //region > constructor, fields
+
+    private final AuthenticationSession authenticationSession;
+    private PersistenceSession persistenceSession; // only non-final so can be replaced in tests.
+
+    public IsisSession(
+            final AuthenticationSession authenticationSession,
+            final PersistenceSession persistenceSession) {
+
+        this.authenticationSession = authenticationSession;
+        this.persistenceSession = persistenceSession;
+    }
+    //endregion
+
+    //region > open, close
+    void open() {
+        persistenceSession.open();
+    }
 
     /**
-     * Normal lifecycle is managed using callbacks in
-     * {@link SessionScopedComponent}. This method is to allow the outer
-     * {@link ApplicationScopedComponent}s to shutdown, closing any and all
-     * running {@link IsisSession}s.
+     * Closes session.
      */
-    void closeAll();
+    void close() {
+        if(persistenceSession != null) {
+            persistenceSession.close();
+        }
+    }
 
-    // //////////////////////////////////////////////////////
-    // Id
-    // //////////////////////////////////////////////////////
+    //endregion
 
-    /**
-     * A descriptive identifier for this {@link IsisSession}.
-     */
-    String getId();
 
-    // //////////////////////////////////////////////////////
-    // Authentication Session
-    // //////////////////////////////////////////////////////
-
+    //region > AuthenticationSession
     /**
      * Returns the {@link AuthenticationSession} representing this user for this
      * {@link IsisSession}.
      */
-    AuthenticationSession getAuthenticationSession();
+    public AuthenticationSession getAuthenticationSession() {
+        return authenticationSession;
+    }
+    //endregion
 
-    // //////////////////////////////////////////////////////
-    // Persistence Session
-    // //////////////////////////////////////////////////////
-
+    //region > Persistence Session
     /**
      * The {@link PersistenceSession} within this {@link IsisSession}.
-     * 
-     * <p>
-     * Would have been created by the {@link #getSessionFactory() owning
-     * factory}'s
-     * 
      */
-    PersistenceSession getPersistenceSession();
+    public PersistenceSession getPersistenceSession() {
+        return persistenceSession;
+    }
 
+    //endregion
 
-    
-    // //////////////////////////////////////////////////////
-    // Transaction (if in progress)
-    // //////////////////////////////////////////////////////
+    //region > transaction
 
-    IsisTransaction getCurrentTransaction();
+    /**
+     * Convenience method that returns the {@link IsisTransaction} of the
+     * session, if any.
+     */
+    public IsisTransaction getCurrentTransaction() {
+        return getTransactionManager().getCurrentTransaction();
+    }
 
-    // //////////////////////////////////////////////////////
-    // Debugging
-    // //////////////////////////////////////////////////////
+    //endregion
 
-    void debugAll(DebugBuilder debug);
+    //region > toString
+    @Override
+    public String toString() {
+        final ToString asString = new ToString(this);
+        asString.append("authenticationSession", getAuthenticationSession());
+        asString.append("persistenceSession", getPersistenceSession());
+        asString.append("transaction", getCurrentTransaction());
+        return asString.toString();
+    }
+    //endregion
 
-    void debug(DebugBuilder debug);
+    //region > Dependencies (from constructor)
 
-    void debugState(DebugBuilder debug);
-
+    private IsisTransactionManager getTransactionManager() {
+        return getPersistenceSession().getTransactionManager();
+    }
+    //endregion
 
 }

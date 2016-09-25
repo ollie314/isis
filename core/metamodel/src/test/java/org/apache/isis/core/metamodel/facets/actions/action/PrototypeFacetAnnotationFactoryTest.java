@@ -20,14 +20,18 @@
 package org.apache.isis.core.metamodel.facets.actions.action;
 
 import java.lang.reflect.Method;
+
 import org.apache.isis.applib.annotation.Prototype;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryTest;
 import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessMethodContext;
 import org.apache.isis.core.metamodel.facets.actions.prototype.PrototypeFacet;
 import org.apache.isis.core.metamodel.facets.actions.prototype.PrototypeFacetAbstract;
+import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 
 public class PrototypeFacetAnnotationFactoryTest extends AbstractFacetFactoryTest {
+
+    private JUnitRuleMockery2 context = JUnitRuleMockery2.createFor(JUnitRuleMockery2.Mode.INTERFACES_AND_CLASSES);
 
     private ActionAnnotationFacetFactory facetFactory;
 
@@ -36,6 +40,7 @@ public class PrototypeFacetAnnotationFactoryTest extends AbstractFacetFactoryTes
         super.setUp();
 
         facetFactory = new ActionAnnotationFacetFactory();
+        facetFactory.setServicesInjector(stubServicesInjector);
     }
 
     @Override

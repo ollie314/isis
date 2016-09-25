@@ -20,35 +20,49 @@
 package org.apache.isis.core.metamodel.specloader.specimpl;
 
 import java.util.List;
+
+import com.google.common.base.Objects;
+
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.annotation.When;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.filter.Filter;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
-import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
+import org.apache.isis.applib.services.bookmark.Bookmark;
+import org.apache.isis.applib.services.command.Command;
+import org.apache.isis.applib.services.command.CommandContext;
 import org.apache.isis.core.commons.lang.StringExtensions;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.QuerySubmitter;
-import org.apache.isis.core.metamodel.adapter.ServicesProvider;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.consent.InteractionResult;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.Facet;
+import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facetapi.MultiTypedFacet;
 import org.apache.isis.core.metamodel.facets.FacetedMethod;
+import org.apache.isis.core.metamodel.facets.actions.action.invocation.CommandUtil;
+import org.apache.isis.core.metamodel.facets.actions.command.CommandFacet;
 import org.apache.isis.core.metamodel.facets.all.describedas.DescribedAsFacet;
 import org.apache.isis.core.metamodel.facets.all.help.HelpFacet;
 import org.apache.isis.core.metamodel.facets.all.hide.HiddenFacet;
 import org.apache.isis.core.metamodel.facets.all.named.NamedFacet;
-import org.apache.isis.core.metamodel.interactions.*;
+import org.apache.isis.core.metamodel.facets.object.mixin.MixinFacet;
+import org.apache.isis.core.metamodel.interactions.AccessContext;
+import org.apache.isis.core.metamodel.interactions.DisablingInteractionAdvisor;
+import org.apache.isis.core.metamodel.interactions.HidingInteractionAdvisor;
+import org.apache.isis.core.metamodel.interactions.InteractionContext;
+import org.apache.isis.core.metamodel.interactions.InteractionUtils;
+import org.apache.isis.core.metamodel.interactions.UsabilityContext;
+import org.apache.isis.core.metamodel.interactions.VisibilityContext;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.command.CommandDtoServiceInternal;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.core.metamodel.spec.feature.ObjectMember;
-import org.apache.isis.core.metamodel.spec.feature.ObjectMemberContext;
-import org.apache.isis.core.metamodel.specloader.collectiontyperegistry.CollectionTypeRegistry;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
+import org.apache.isis.schema.cmd.v1.CommandDto;
+import org.apache.isis.schema.utils.CommandDtoUtils;
 
 public abstract class ObjectMemberAbstract implements ObjectMember {
 
@@ -56,59 +70,38 @@ public abstract class ObjectMemberAbstract implements ObjectMember {
         return type == null ? null : specificationLookup.loadSpecification(type);
     }
 
-    private final CollectionTypeRegistry collectionTypeRegistry = new CollectionTypeRegistry();
-
-    protected final String defaultName;
+    //region > fields
     private final String id;
     private final FacetedMethod facetedMethod;
     private final FeatureType featureType;
-    private final AuthenticationSessionProvider authenticationSessionProvider;
-    private final SpecificationLoader specificationLookup;
-    private final AdapterManager adapterManager;
-    private final ServicesProvider servicesProvider;
-    private final QuerySubmitter querySubmitter;
-    private final DeploymentCategory deploymentCategory;
+    private final SpecificationLoader specificationLoader;
+    private final ServicesInjector servicesInjector;
+    private final PersistenceSessionServiceInternal persistenceSessionServiceInternal;
+    //endregion
 
-    protected ObjectMemberAbstract(final FacetedMethod facetedMethod, final FeatureType featureType, final ObjectMemberContext objectMemberContext) {
+    protected ObjectMemberAbstract(
+            final FacetedMethod facetedMethod,
+            final FeatureType featureType,
+            final ServicesInjector servicesInjector) {
         final String id = facetedMethod.getIdentifier().getMemberName();
         if (id == null) {
-            throw new IllegalArgumentException("Name must always be set");
+            throw new IllegalArgumentException("Id must always be set");
         }
         this.facetedMethod = facetedMethod;
         this.featureType = featureType;
         this.id = id;
-        this.defaultName = StringExtensions.asNaturalName2(this.id);
 
-        this.deploymentCategory = objectMemberContext.getDeploymentCategory();
-        this.authenticationSessionProvider = objectMemberContext.getAuthenticationSessionProvider();
-        this.specificationLookup = objectMemberContext.getSpecificationLookup();
-        this.adapterManager = objectMemberContext.getAdapterManager();
-        this.servicesProvider = objectMemberContext.getServicesProvider();
-        this.querySubmitter = objectMemberContext.getQuerySubmitter();
+        this.servicesInjector = servicesInjector;
+
+        this.specificationLoader = servicesInjector.getSpecificationLoader();
+        this.persistenceSessionServiceInternal = servicesInjector.getPersistenceSessionServiceInternal();
     }
 
-    // /////////////////////////////////////////////////////////////
-    // from context
-    // /////////////////////////////////////////////////////////////
-
-    public DeploymentCategory getDeploymentCategory() {
-        return deploymentCategory;
-    }
-    
-    // /////////////////////////////////////////////////////////////
-    // Identifiers
-    // /////////////////////////////////////////////////////////////
+    //region > Identifiers
 
     @Override
     public String getId() {
         return id;
-    }
-
-    /**
-     * @return the facetedMethod
-     */
-    public FacetedMethod getFacetedMethod() {
-        return facetedMethod;
     }
 
     @Override
@@ -121,59 +114,66 @@ public abstract class ObjectMemberAbstract implements ObjectMember {
         return featureType;
     }
 
-    // /////////////////////////////////////////////////////////////
-    // Facets
-    // /////////////////////////////////////////////////////////////
+    //endregion
+
+    //region > Facets
+
+    public FacetedMethod getFacetedMethod() {
+        return facetedMethod;
+    }
+
+    protected FacetHolder getFacetHolder() {
+        return getFacetedMethod();
+    }
 
     @Override
     public boolean containsFacet(final Class<? extends Facet> facetType) {
-        return getFacetedMethod().containsFacet(facetType);
+        return getFacetHolder().containsFacet(facetType);
     }
 
     @Override
     public boolean containsDoOpFacet(final Class<? extends Facet> facetType) {
-        return getFacetedMethod().containsDoOpFacet(facetType);
+        return getFacetHolder().containsDoOpFacet(facetType);
     }
 
     @Override
     public <T extends Facet> T getFacet(final Class<T> cls) {
-        return getFacetedMethod().getFacet(cls);
+        return getFacetHolder().getFacet(cls);
     }
 
     @Override
     public Class<? extends Facet>[] getFacetTypes() {
-        return getFacetedMethod().getFacetTypes();
+        return getFacetHolder().getFacetTypes();
     }
 
     @Override
     public List<Facet> getFacets(final Filter<Facet> filter) {
-        return getFacetedMethod().getFacets(filter);
+        return getFacetHolder().getFacets(filter);
     }
 
     @Override
     public void addFacet(final Facet facet) {
-        getFacetedMethod().addFacet(facet);
+        getFacetHolder().addFacet(facet);
     }
 
     @Override
     public void addFacet(final MultiTypedFacet facet) {
-        getFacetedMethod().addFacet(facet);
+        getFacetHolder().addFacet(facet);
     }
 
     @Override
     public void removeFacet(final Facet facet) {
-        getFacetedMethod().removeFacet(facet);
+        getFacetHolder().removeFacet(facet);
     }
 
     @Override
     public void removeFacet(final Class<? extends Facet> facetType) {
-        getFacetedMethod().removeFacet(facetType);
+        getFacetHolder().removeFacet(facetType);
     }
 
-    // /////////////////////////////////////////////////////////////
-    // Name, Description, Help (convenience for facets)
-    // /////////////////////////////////////////////////////////////
+    //endregion
 
+    //region > Name, Description, Help (convenience for facets)
     /**
      * Return the default label for this member. This is based on the name of
      * this member.
@@ -189,7 +189,7 @@ public abstract class ObjectMemberAbstract implements ObjectMember {
         }
         else {
             // this should now be redundant, see NamedFacetDefault
-            return defaultName;
+            return StringExtensions.asNaturalName2(getId());
         }
     }
 
@@ -205,9 +205,25 @@ public abstract class ObjectMemberAbstract implements ObjectMember {
         return facet.value();
     }
 
-    // /////////////////////////////////////////////////////////////
-    // Hidden (or visible)
-    // /////////////////////////////////////////////////////////////
+    //endregion
+
+    //region > Hidden (or visible)
+    /**
+     * Create an {@link InteractionContext} to represent an attempt to view this
+     * member (that is, to check if it is visible or not).
+     *
+     * <p>
+     * Typically it is easier to just call
+     * {@link ObjectMember#isVisible(ObjectAdapter, InteractionInitiatedBy, Where)}; this is
+     * provided as API for symmetry with interactions (such as
+     * {@link AccessContext} accesses) have no corresponding vetoing methods.
+     */
+     protected abstract VisibilityContext<?> createVisibleInteractionContext(
+             final ObjectAdapter targetObjectAdapter,
+             final InteractionInitiatedBy interactionInitiatedBy,
+             final Where where);
+
+
 
     @Override
     public boolean isAlwaysHidden() {
@@ -223,47 +239,63 @@ public abstract class ObjectMemberAbstract implements ObjectMember {
     /**
      * Loops over all {@link HidingInteractionAdvisor} {@link Facet}s and
      * returns <tt>true</tt> only if none hide the member.
-     * 
-     * <p>
-     * TODO: currently this method is hard-coded to assume all interactions are
-     * initiated {@link InteractionInvocationMethod#BY_USER by user}.
      */
     @Override
-    public Consent isVisible(final AuthenticationSession session, final ObjectAdapter target, Where where) {
-        return isVisibleResult(session, target, where).createConsent();
+    public Consent isVisible(
+            final ObjectAdapter target,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            final Where where) {
+        return isVisibleResult(target, interactionInitiatedBy, where).createConsent();
     }
 
-    private InteractionResult isVisibleResult(final AuthenticationSession session, final ObjectAdapter target, Where where) {
-        final VisibilityContext<?> ic = createVisibleInteractionContext(session, InteractionInvocationMethod.BY_USER, target, where);
+    private InteractionResult isVisibleResult(
+            final ObjectAdapter target,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            final Where where) {
+        final VisibilityContext<?> ic = createVisibleInteractionContext(target, interactionInitiatedBy, where);
         return InteractionUtils.isVisibleResult(this, ic);
     }
+    //endregion
 
-    // /////////////////////////////////////////////////////////////
-    // Disabled (or enabled)
-    // /////////////////////////////////////////////////////////////
+    //region > Disabled (or enabled)
+    /**
+     * Create an {@link InteractionContext} to represent an attempt to
+     * use this member (that is, to check if it is usable or not).
+     *
+     * <p>
+     * Typically it is easier to just call
+     * {@link ObjectMember#isUsable(ObjectAdapter, InteractionInitiatedBy, Where)}; this is
+     * provided as API for symmetry with interactions (such as
+     * {@link AccessContext} accesses) have no corresponding vetoing methods.
+     */
+    protected abstract UsabilityContext<?> createUsableInteractionContext(
+            final ObjectAdapter target,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            final Where where);
 
     /**
      * Loops over all {@link DisablingInteractionAdvisor} {@link Facet}s and
      * returns <tt>true</tt> only if none disables the member.
-     * 
-     * <p>
-     * TODO: currently this method is hard-coded to assume all interactions are
-     * initiated {@link InteractionInvocationMethod#BY_USER by user}.
      */
     @Override
-    public Consent isUsable(final AuthenticationSession session, final ObjectAdapter target, Where where) {
-        return isUsableResult(session, target, where).createConsent();
+    public Consent isUsable(
+            final ObjectAdapter target,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            final Where where) {
+        return isUsableResult(target, interactionInitiatedBy, where).createConsent();
     }
 
-    private InteractionResult isUsableResult(final AuthenticationSession session, final ObjectAdapter target, Where where) {
-        final UsabilityContext<?> ic = createUsableInteractionContext(session, InteractionInvocationMethod.BY_USER, target, where);
+    private InteractionResult isUsableResult(
+            final ObjectAdapter target,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            final Where where) {
+        final UsabilityContext<?> ic = createUsableInteractionContext(target, interactionInitiatedBy, where);
         return InteractionUtils.isUsableResult(this, ic);
     }
 
-    // //////////////////////////////////////////////////////////////////
-    // isAssociation, isAction
-    // //////////////////////////////////////////////////////////////////
+    //endregion
 
+    //region > isAssociation, isAction
     @Override
     public boolean isAction() {
         return featureType.isAction();
@@ -283,53 +315,168 @@ public abstract class ObjectMemberAbstract implements ObjectMember {
     public boolean isOneToOneAssociation() {
         return featureType.isProperty();
     }
+    //endregion
 
-    // //////////////////////////////////////////////////////////////////
-    // Convenience
-    // //////////////////////////////////////////////////////////////////
-
+    //region > mixinAdapterFor
     /**
-     * The current {@link AuthenticationSession} (can change over time so do not
-     * cache).
+     * For mixins
      */
-    protected AuthenticationSession getAuthenticationSession() {
-        return authenticationSessionProvider.getAuthenticationSession();
+    protected ObjectAdapter mixinAdapterFor(
+            final Class<?> mixinType,
+            final ObjectAdapter mixedInAdapter) {
+        final ObjectSpecification objectSpecification = getSpecificationLoader().loadSpecification(mixinType);
+        final MixinFacet mixinFacet = objectSpecification.getFacet(MixinFacet.class);
+        final Object mixinPojo = mixinFacet.instantiate(mixedInAdapter.getObject());
+        return getPersistenceSessionService().adapterFor(mixinPojo);
     }
 
-    // //////////////////////////////////////////////////////////////////
-    // toString
-    // //////////////////////////////////////////////////////////////////
+    public static String determineNameFrom(final ObjectAction mixinAction) {
+        return StringExtensions.asCapitalizedName(suffix(mixinAction));
+    }
+
+    static String determineIdFrom(final ObjectActionDefault mixinAction) {
+        final String id = compress(suffix(mixinAction));
+        return id;
+    }
+
+    private static String compress(final String suffix) {
+        return suffix.replaceAll(" ","");
+    }
+
+    static String suffix(final ObjectAction mixinAction) {
+        return suffix(mixinAction.getOnType().getSingularName());
+    }
+
+    static String suffix(final String singularName) {
+        if (singularName.endsWith("_")) {
+            if (Objects.equal(singularName, "_")) {
+                return singularName;
+            }
+            return singularName;
+        }
+        final int indexOfUnderscore = singularName.lastIndexOf('_');
+        if (indexOfUnderscore == -1) {
+            return singularName;
+        }
+        return singularName.substring(indexOfUnderscore + 1);
+    }
+
+    //endregion
+
+    //region > toString
 
     @Override
     public String toString() {
         return String.format("id=%s,name='%s'", getId(), getName());
     }
 
-    // //////////////////////////////////////////////////////////////////
-    // Dependencies
-    // //////////////////////////////////////////////////////////////////
+    //endregion
 
-    public AuthenticationSessionProvider getAuthenticationSessionProvider() {
-        return authenticationSessionProvider;
+    //region > Dependencies
+
+    public SpecificationLoader getSpecificationLoader() {
+        return specificationLoader;
     }
 
-    public SpecificationLoader getSpecificationLookup() {
-        return specificationLookup;
+    public ServicesInjector getServicesInjector() {
+        return servicesInjector;
     }
 
-    public AdapterManager getAdapterManager() {
-        return adapterManager;
+    public PersistenceSessionServiceInternal getPersistenceSessionService() {
+        return persistenceSessionServiceInternal;
     }
 
-    public ServicesProvider getServicesProvider() {
-        return servicesProvider;
+    protected <T> T lookupService(final Class<T> serviceClass) {
+        return getServicesInjector().lookupService(serviceClass);
     }
 
-    public QuerySubmitter getQuerySubmitter() {
-        return querySubmitter;
+    protected CommandContext getCommandContext() {
+        CommandContext commandContext = lookupService(CommandContext.class);
+        if (commandContext == null) {
+            throw new IllegalStateException("The CommandContext service is not registered!");
+        }
+        return commandContext;
     }
 
-    public CollectionTypeRegistry getCollectionTypeRegistry() {
-        return collectionTypeRegistry;
+    protected CommandDtoServiceInternal getCommandDtoService() {
+        return lookupService(CommandDtoServiceInternal.class);
     }
+
+    //endregion
+
+    //region > command (setup)
+
+
+    protected void setupCommandTarget(final ObjectAdapter targetAdapter, final String arguments) {
+        final CommandContext commandContext = getCommandContext();
+        final Command command = commandContext.getCommand();
+
+        if (command.getExecutor() != Command.Executor.USER) {
+            return;
+        }
+
+        if(command.getTarget() != null) {
+            // is set up by the outer-most action; inner actions (invoked via the WrapperFactory) must not overwrite
+            return;
+        }
+
+        command.setTargetClass(CommandUtil.targetClassNameFor(targetAdapter));
+        command.setTargetAction(CommandUtil.targetMemberNameFor(this));
+        command.setArguments(arguments);
+
+        final Bookmark targetBookmark = CommandUtil.bookmarkFor(targetAdapter);
+        command.setTarget(targetBookmark);
+    }
+
+    protected void setupCommandMemberIdentifier() {
+
+        final CommandContext commandContext = getCommandContext();
+        final Command command = commandContext.getCommand();
+
+        if (command.getExecutor() != Command.Executor.USER) {
+            return;
+        }
+
+        if (command.getMemberIdentifier() != null) {
+            // any contributed/mixin actions will fire after the main action
+            // the guard here prevents them from trashing the command's memberIdentifier
+            return;
+        }
+
+        command.setMemberIdentifier(CommandUtil.memberIdentifierFor(this));
+    }
+
+    protected void setupCommandDtoAndExecutionContext(final CommandDto dto) {
+        final CommandContext commandContext = getCommandContext();
+        final Command command = commandContext.getCommand();
+
+        if (command.getExecutor() != Command.Executor.USER) {
+            return;
+        }
+
+        if (command.getMemento() != null) {
+            // guard here to prevent subsequent contributed/mixin actions from
+            // trampling over the command's memento and execution context
+            return;
+        }
+
+        // memento
+
+        final String mementoXml = CommandDtoUtils.toXml(dto);
+        command.setMemento(mementoXml);
+
+        // copy over the command execution 'context' (if available)
+        final CommandFacet commandFacet = getFacetHolder().getFacet(CommandFacet.class);
+        if(commandFacet != null && !commandFacet.isDisabled()) {
+            command.setExecuteIn(commandFacet.executeIn());
+            command.setPersistence(commandFacet.persistence());
+        } else {
+            // if no facet, assume do want to execute right now, but only persist (eventually) if hinted.
+            command.setExecuteIn(org.apache.isis.applib.annotation.Command.ExecuteIn.FOREGROUND);
+            command.setPersistence(org.apache.isis.applib.annotation.Command.Persistence.IF_HINTED);
+        }
+    }
+
+    //endregion
+
 }

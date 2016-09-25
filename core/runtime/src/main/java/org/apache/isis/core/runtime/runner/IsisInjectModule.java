@@ -20,119 +20,109 @@
 package org.apache.isis.core.runtime.runner;
 
 import java.util.List;
-import com.google.common.collect.Lists;
+import java.util.Map;
+
 import com.google.inject.AbstractModule;
-import com.google.inject.Inject;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
-import org.apache.isis.core.commons.config.IsisConfigurationBuilder;
-import org.apache.isis.core.commons.config.IsisConfigurationBuilderDefault;
-import org.apache.isis.core.runtime.installerregistry.InstallerLookup;
-import org.apache.isis.core.runtime.system.DeploymentType;
-import org.apache.isis.core.runtime.system.IsisSystem;
-import org.apache.isis.core.runtime.system.IsisSystemFactory;
-import org.apache.isis.core.runtime.systemusinginstallers.IsisSystemThatUsesInstallersFactory;
+
+import org.apache.isis.applib.AppManifest;
+import org.apache.isis.applib.fixturescripts.FixtureScript;
+import org.apache.isis.core.commons.config.IsisConfiguration;
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactoryBuilder;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
+import org.apache.isis.core.runtime.systemusinginstallers.IsisComponentProviderUsingInstallers;
 
 public class IsisInjectModule extends AbstractModule {
 
-    private final DeploymentType deploymentType;
-    private final InstallerLookup installerLookup;
-    private final IsisConfigurationBuilder isisConfigurationBuilder;
+    /**
+     * Placeholder for no {@link AppManifest}.
+     *
+     * <p>
+     *     This is bound in by default in <tt>IsisWicketModule</tt>, but is replaced with null when the system is
+     *     {@link #provideIsisSessionFactory(AppManifest)} created} .
+     * </p>
+     */
+    private static final AppManifest APP_MANIFEST_NOOP = new AppManifest() {
+        @Override public List<Class<?>> getModules() {
+            return null;
+        }
+        @Override public List<Class<?>> getAdditionalServices() {
+            return null;
+        }
 
-    private final List<String> viewerNames = Lists.newArrayList();
+        @Override public String getAuthenticationMechanism() {
+            return null;
+        }
 
-    private static InstallerLookup defaultInstallerLookup() {
-        return new InstallerLookup();
-    }
+        @Override public String getAuthorizationMechanism() {
+            return null;
+        }
 
-    private static IsisConfigurationBuilderDefault defaultConfigurationBuider() {
-        return new IsisConfigurationBuilderDefault();
-    }
+        @Override public List<Class<? extends FixtureScript>> getFixtures() {
+            return null;
+        }
 
-    public IsisInjectModule(final DeploymentType deploymentType) {
-        this(deploymentType, defaultConfigurationBuider(), defaultInstallerLookup());
-    }
+        @Override public Map<String, String> getConfigurationProperties() {
+            return null;
+        }
+    };
 
-    public IsisInjectModule(final DeploymentType deploymentType, final IsisConfigurationBuilder isisConfigurationBuilder) {
-        this(deploymentType, isisConfigurationBuilder, defaultInstallerLookup());
-    }
+    private final DeploymentCategory deploymentCategory;
+    private final IsisConfigurationDefault isisConfiguration;
 
-    public IsisInjectModule(final DeploymentType deploymentType, final InstallerLookup installerLookup) {
-        this(deploymentType, defaultConfigurationBuider(), installerLookup);
-    }
-
-    public IsisInjectModule(final DeploymentType deploymentType, final IsisConfigurationBuilder isisConfigurationBuilder, final InstallerLookup installerLookup) {
-        this.installerLookup = installerLookup;
-        this.isisConfigurationBuilder = isisConfigurationBuilder;
-        this.deploymentType = deploymentType;
+    public IsisInjectModule(
+            final DeploymentCategory deploymentCategory,
+            final IsisConfigurationDefault isisConfiguration) {
+        this.isisConfiguration = isisConfiguration;
+        this.deploymentCategory = deploymentCategory;
     }
 
     /**
-     * As passed in or defaulted by the constructors.
+     * Allows the {@link AppManifest} to be programmatically bound in.
      */
-    @SuppressWarnings("unused")
-    @Provides
-    @Singleton
-    private DeploymentType provideDeploymentsType() {
-        return deploymentType;
-    }
-
-    /**
-     * As passed in or defaulted by the constructors.
-     */
-    @SuppressWarnings("unused")
-    @Provides
-    @Singleton
-    private IsisConfigurationBuilder providesConfigurationBuilder() {
-        return isisConfigurationBuilder;
-    }
-
-    /**
-     * As passed in or defaulted by the constructors.
-     */
-    @SuppressWarnings("unused")
-    @Provides
-    @Singleton
-    @Inject
-    private InstallerLookup providesInstallerLookup(final IsisConfigurationBuilder configBuilder) {
-        // wire up and initialize installer lookup
-        configBuilder.injectInto(installerLookup);
-        installerLookup.init();
-        return installerLookup;
-    }
-
-    /**
-     * Adjustment (as per GOOS book)
-     */
-    public void addViewerNames(final List<String> viewerNames) {
-        this.viewerNames.addAll(viewerNames);
-    }
-
     @Override
     protected void configure() {
-        requireBinding(DeploymentType.class);
-        requireBinding(IsisConfigurationBuilder.class);
-        requireBinding(InstallerLookup.class);
-    }
-
-    @SuppressWarnings("unused")
-    @Provides
-    @Inject
-    @Singleton
-    private IsisSystemFactory provideIsisSystemFactory(final InstallerLookup installerLookup) {
-        final IsisSystemThatUsesInstallersFactory systemFactory = new IsisSystemThatUsesInstallersFactory(installerLookup);
-        systemFactory.init();
-        return systemFactory;
+        bind(AppManifest.class).toInstance(APP_MANIFEST_NOOP);
     }
 
     @Provides
-    @Inject
     @Singleton
-    protected IsisSystem provideIsisSystem(final DeploymentType deploymentType, final IsisSystemFactory systemFactory) {
-        final IsisSystem system = systemFactory.createSystem(deploymentType);
-        system.init();
-        return system;
+    protected IsisConfiguration provideConfiguration() {
+        return isisConfiguration;
     }
 
+    @Provides
+    @Singleton
+    protected DeploymentCategory provideDeploymentCategory() {
+        return deploymentCategory;
+    }
+
+    @Provides
+    @com.google.inject.Inject
+    @Singleton
+    protected IsisSessionFactory provideIsisSessionFactory(final AppManifest appManifestIfAny) {
+
+        final AppManifest appManifest = appManifestIfAny != APP_MANIFEST_NOOP ? appManifestIfAny : null;
+
+        final IsisComponentProviderUsingInstallers componentProvider =
+                new IsisComponentProviderUsingInstallers(appManifest, isisConfiguration);
+
+        final IsisSessionFactoryBuilder builder = new IsisSessionFactoryBuilder(componentProvider, deploymentCategory);
+
+        // as a side-effect, if the metamodel turns out to be invalid, then
+        // this will push the MetaModelInvalidException into IsisContext.
+        return builder.buildSessionFactory();
+    }
+
+    @Provides
+    @com.google.inject.Inject
+    @Singleton
+    protected ServicesInjector provideServicesInjector(final IsisSessionFactory isisSessionFactory) {
+        return isisSessionFactory.getServicesInjector();
+    }
 
 }

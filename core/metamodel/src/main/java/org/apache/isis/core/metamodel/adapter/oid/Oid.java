@@ -31,7 +31,7 @@ import org.apache.isis.core.metamodel.adapter.version.Version;
 
 /**
  * An immutable identifier for either a root object (subtype {@link RootOid}) or 
- * an aggregated object (subtype {@link AggregatedOid}).
+ * a parented collection (subtype {@link ParentedCollectionOid}).
  * 
  * <p>
  * Note that value objects (strings, ints, {@link Value}s etc) do not have an {@link Oid}. 
@@ -41,11 +41,12 @@ public interface Oid extends Encodable {
     /**
      * A string representation of this {@link Oid}.
      */
-    String enString(OidMarshaller oidMarshaller);
+    String enString();
 
-    String enStringNoVersion(OidMarshaller oidMarshaller);
+    String enStringNoVersion();
     
     Version getVersion();
+
     void setVersion(Version version);
 
     /**
@@ -53,8 +54,8 @@ public interface Oid extends Encodable {
      * or a view model object, or for a persistent object.
      * 
      * <p>
-     * In the case of an {@link AggregatedOid}, is determined by the state 
-     * of its {@link AggregatedOid#getParentOid() parent}'s {@link RootOid#isTransient() state}.
+     * In the case of an {@link ParentedCollectionOid}, is determined by the state
+     * of its {@link ParentedCollectionOid#getRootOid() root}'s {@link RootOid#isTransient() state}.
      */
     boolean isTransient();
 

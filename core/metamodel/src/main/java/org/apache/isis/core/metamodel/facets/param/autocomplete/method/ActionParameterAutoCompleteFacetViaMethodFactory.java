@@ -21,25 +21,25 @@ package org.apache.isis.core.metamodel.facets.param.autocomplete.method;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.isis.core.commons.lang.StringExtensions;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManagerAware;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facets.FacetedMethod;
 import org.apache.isis.core.metamodel.facets.FacetedMethodParameter;
-import org.apache.isis.core.metamodel.methodutils.MethodScope;
 import org.apache.isis.core.metamodel.facets.MethodFinderUtils;
 import org.apache.isis.core.metamodel.facets.MethodPrefixBasedFacetFactoryAbstract;
 import org.apache.isis.core.metamodel.facets.MethodPrefixConstants;
+import org.apache.isis.core.metamodel.methodutils.MethodScope;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 
-public class ActionParameterAutoCompleteFacetViaMethodFactory extends MethodPrefixBasedFacetFactoryAbstract implements AdapterManagerAware {
+public class ActionParameterAutoCompleteFacetViaMethodFactory extends MethodPrefixBasedFacetFactoryAbstract {
 
     private static final String[] PREFIXES = {"autoComplete"};
-
-    private AdapterManager adapterManager;
 
     public ActionParameterAutoCompleteFacetViaMethodFactory() {
         super(FeatureType.ACTIONS_ONLY, OrphanValidation.VALIDATE, PREFIXES);
@@ -73,10 +73,8 @@ public class ActionParameterAutoCompleteFacetViaMethodFactory extends MethodPref
             final Class<?> paramType = params[i];
             final Class<?> arrayOfParamType = (Array.newInstance(paramType, 0)).getClass();
 
-            Method autoCompleteMethod = findAutoCompleteNumMethodReturning(processMethodContext, i, arrayOfParamType);
-            if (autoCompleteMethod == null) {
-                autoCompleteMethod = findAutoCompleteNumMethodReturning(processMethodContext, i, List.class);
-            }
+            final Class[] returnTypes = { arrayOfParamType, List.class, Set.class, Collection.class };
+            Method autoCompleteMethod = findAutoCompleteNumMethodReturning(processMethodContext, i, returnTypes);
             if (autoCompleteMethod == null) {
                 continue;
             }
@@ -84,30 +82,37 @@ public class ActionParameterAutoCompleteFacetViaMethodFactory extends MethodPref
 
             // add facets directly to parameters, not to actions
             final FacetedMethodParameter paramAsHolder = parameters.get(i);
-            FacetUtil.addFacet(new ActionParameterAutoCompleteFacetViaMethod(autoCompleteMethod, paramType, paramAsHolder, getSpecificationLoader(), getAdapterManager()));
+            FacetUtil.addFacet(
+                    new ActionParameterAutoCompleteFacetViaMethod(
+                            autoCompleteMethod, paramType, paramAsHolder,
+                            getDeploymentCategory(), getSpecificationLoader(),
+                            getAuthenticationSessionProvider(), adapterManager));
         }
     }
 
-    private Method findAutoCompleteNumMethodReturning(final ProcessMethodContext processMethodContext, final int i, final Class<?> paramType) {
+    private Method findAutoCompleteNumMethodReturning(
+            final ProcessMethodContext processMethodContext,
+            final int paramNum,
+            final Class<?>[] returnTypes) {
 
         final Class<?> cls = processMethodContext.getCls();
         final Method actionMethod = processMethodContext.getMethod();
         final String capitalizedName = StringExtensions.asCapitalizedName(actionMethod.getName());
-        final String name = MethodPrefixConstants.AUTO_COMPLETE_PREFIX + i + capitalizedName;
-        return MethodFinderUtils.findMethod(cls, MethodScope.OBJECT, name, paramType, new Class[]{String.class});
+        final String name = MethodPrefixConstants.AUTO_COMPLETE_PREFIX + paramNum + capitalizedName;
+        return MethodFinderUtils.findMethod(cls, MethodScope.OBJECT, name, returnTypes, new Class[]{String.class});
     }
 
     // ///////////////////////////////////////////////////////////////
     // Dependencies
     // ///////////////////////////////////////////////////////////////
 
+
     @Override
-    public void setAdapterManager(final AdapterManager adapterManager) {
-        this.adapterManager = adapterManager;
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        adapterManager = servicesInjector.getPersistenceSessionServiceInternal();
     }
 
-    private AdapterManager getAdapterManager() {
-        return adapterManager;
-    }
+    PersistenceSessionServiceInternal adapterManager;
 
 }

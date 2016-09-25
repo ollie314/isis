@@ -19,9 +19,10 @@ package org.apache.isis.objectstore.jdo.applib.service;
 import java.sql.Timestamp;
 import java.util.Comparator;
 import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.isis.applib.DomainObjectContainer;
+
 import org.apache.isis.applib.annotation.Action;
 import org.apache.isis.applib.annotation.ActionLayout;
 import org.apache.isis.applib.annotation.DomainObject;
@@ -35,7 +36,11 @@ import org.apache.isis.applib.annotation.PropertyLayout;
 import org.apache.isis.applib.annotation.SemanticsOf;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.services.bookmark.Bookmark;
-import org.apache.isis.applib.services.bookmark.BookmarkService;
+import org.apache.isis.applib.services.bookmark.BookmarkService2;
+import org.apache.isis.applib.services.message.MessageService;
+import org.apache.isis.applib.services.metamodel.MetaModelService2;
+import org.apache.isis.applib.services.publish.PublisherService;
+import org.apache.isis.applib.services.publish.PublishingService;
 import org.apache.isis.applib.util.ObjectContracts;
 
 import static org.apache.isis.applib.annotation.Optionality.MANDATORY;
@@ -63,7 +68,17 @@ public abstract class DomainChangeJdoAbstract {
     public static enum ChangeType {
         COMMAND,
         AUDIT_ENTRY,
-        PUBLISHED_EVENT;
+        /**
+         * As per {@link PublishingService}.
+         *
+         * @deprecated - replaced by {@link #PUBLISHED_INTERACTION} (because {@link PublishingService} has been replaced by {@link PublisherService}).
+         */
+        @Deprecated
+        PUBLISHED_EVENT,
+        /**
+         * As per {@link PublisherService}.
+         */
+        PUBLISHED_INTERACTION;
         @Override
         public String toString() {
             return name().replace("_", " ");
@@ -75,7 +90,7 @@ public abstract class DomainChangeJdoAbstract {
     
     private final ChangeType type;
     /**
-     * Distinguishes <tt>CommandJdo</tt>s, <tt>AuditEntryJdo</tt>s and <tt>PublishedEventJdo</tt>s      * when these are shown mixed together in a (standalone) table.
+     * Distinguishes commands from audit entries from published events/interactions (when these are shown mixed together in a (standalone) table).
      */
     @Property
     @PropertyLayout(
@@ -153,12 +168,14 @@ public abstract class DomainChangeJdoAbstract {
 
     @Programmatic
     public Bookmark getTarget() {
-        return Util.bookmarkFor(getTargetStr());
+        final String str = getTargetStr();
+        return str != null? new Bookmark(str): null;
     }
     
     @Programmatic
     public void setTarget(Bookmark target) {
-        setTargetStr(Util.asString(target));
+        final String targetStr = target != null ? target.toString() : null;
+        setTargetStr(targetStr);
     }
 
     // //////////////////////////////////////
@@ -166,20 +183,29 @@ public abstract class DomainChangeJdoAbstract {
     private String targetAction;
     
     /**
-     * The action invoked which caused the domain object to be changed..
-     * 
+     * The member interaction (ie action invocation or property edit) which caused the domain object to be changed.
+     *
      * <p>
-     * Populated only for <tt>CommandJdo</tt>s.
-     * 
+     *     Populated for commands and for published events that represent action invocations or property edits.
+     * </p>
+     *
      * <p>
      * This dummy implementation is a trick so that Isis will render the property in a standalone table.  Each of the
      * subclasses override with the &quot;real&quot; implementation.
+     * </p>
+     *
+     * <p>
+     *     NB: commands and published events applied only to actions, hence the name of this field.  In a future release
+     *     the name of this field may change to &quot;TargetMember&quot;.  Note that the {@link PropertyLayout} already uses
+     *     &quot;Member&quot; this as a name hint.
+     * </p>
+     *
      */
     @Property(
             optionality = OPTIONAL
     )
     @PropertyLayout(
-            named="Action",
+            named="Member",
             hidden = Where.ALL_EXCEPT_STANDALONE_TABLES
     )
     @MemberOrder(name="Target", sequence = "20")
@@ -220,11 +246,34 @@ public abstract class DomainChangeJdoAbstract {
     )
     @MemberOrder(name="TargetStr", sequence="1")
     public Object openTargetObject() {
-        return Util.lookupBookmark(getTarget(), bookmarkService, container);
+        try {
+            return bookmarkService != null
+                    ? bookmarkService.lookup(getTarget(), BookmarkService2.FieldResetPolicy.DONT_RESET)
+                    : null;
+        } catch(RuntimeException ex) {
+            if(ex.getClass().getName().contains("ObjectNotFoundException")) {
+                messageService.warnUser("Object not found - has it since been deleted?");
+                return null;
+            }
+            throw ex;
+        }
     }
+
     public boolean hideOpenTargetObject() {
         return getTarget() == null;
     }
+
+    public String disableOpenTargetObject() {
+        final Object targetObject = getTarget();
+        if (targetObject == null) {
+            return null;
+        }
+        final MetaModelService2.Sort sortOfObject = metaModelService.sortOf(getTarget());
+        return !(sortOfObject.isViewModel() || sortOfObject.isJdoEntity())
+                ? "Can only open view models or entities"
+                : null;
+    }
+
 
 
     // //////////////////////////////////////
@@ -302,23 +351,23 @@ public abstract class DomainChangeJdoAbstract {
     // //////////////////////////////////////
 
     public static Comparator<DomainChangeJdoAbstract> compareByTimestampDescThenType(){
-        return ObjectContracts.compareBy("timestamp desc,type");
+        return ObjectContracts.compareBy("timestamp desc","type");
     }
 
     public static Comparator<DomainChangeJdoAbstract> compareByTargetThenTimestampDescThenType(){
-        return ObjectContracts.compareBy("targetStr,timestamp desc,type");
+        return ObjectContracts.compareBy("targetStr","timestamp desc","type");
     }
     
     public static Comparator<DomainChangeJdoAbstract> compareByTargetThenUserThenTimestampDescThenType(){
-        return ObjectContracts.compareBy("targetStr,user,timestamp desc,type");
+        return ObjectContracts.compareBy("targetStr","user","timestamp desc","type");
     }
     
     public static Comparator<DomainChangeJdoAbstract> compareByUserThenTimestampDescThenType(){
-        return ObjectContracts.compareBy("user,timestamp desc,type");
+        return ObjectContracts.compareBy("user","timestamp desc","type");
     }
     
     public static Comparator<DomainChangeJdoAbstract> compareByUserThenTargetThenTimestampDescThenType(){
-        return ObjectContracts.compareBy("user,targetStr,timestamp desc,type");
+        return ObjectContracts.compareBy("user","targetStr","timestamp desc","type");
     }
 
     // //////////////////////////////////////
@@ -326,9 +375,12 @@ public abstract class DomainChangeJdoAbstract {
     // //////////////////////////////////////
     
     @javax.inject.Inject
-    protected BookmarkService bookmarkService;
+    protected BookmarkService2 bookmarkService;
     
     @javax.inject.Inject
-    protected DomainObjectContainer container;
+    protected MessageService messageService;
+
+    @javax.inject.Inject
+    protected MetaModelService2 metaModelService;
 
 }

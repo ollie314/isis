@@ -20,6 +20,7 @@
 package org.apache.isis.core.metamodel.facets.objectvalue.choices;
 
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 
@@ -28,7 +29,9 @@ public interface ChoicesFacet extends Facet {
     /**
      * Gets a set of choices for this object.
      */
-    public Object[] getChoices(ObjectAdapter adapter);
+    public Object[] getChoices(
+            final ObjectAdapter adapter,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     
     

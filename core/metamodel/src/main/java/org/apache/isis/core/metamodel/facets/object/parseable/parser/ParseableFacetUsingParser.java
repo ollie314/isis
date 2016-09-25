@@ -20,15 +20,15 @@
 package org.apache.isis.core.metamodel.facets.object.parseable.parser;
 
 import java.util.IllegalFormatException;
+
+import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.adapters.Parser;
 import org.apache.isis.applib.adapters.ParsingException;
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.consent.InteractionResultSet;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetAbstract;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.object.parseable.ParseableFacet;
@@ -38,26 +38,25 @@ import org.apache.isis.core.metamodel.interactions.InteractionUtils;
 import org.apache.isis.core.metamodel.interactions.ObjectValidityContext;
 import org.apache.isis.core.metamodel.interactions.ParseValueContext;
 import org.apache.isis.core.metamodel.interactions.ValidityContext;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 
 public class ParseableFacetUsingParser extends FacetAbstract implements ParseableFacet {
 
     private final Parser<?> parser;
-    private final DeploymentCategory deploymentCategory;
     private final AuthenticationSessionProvider authenticationSessionProvider;
     private final ServicesInjector dependencyInjector;
     private final AdapterManager adapterManager;
 
     public ParseableFacetUsingParser(
-            final Parser<?> parser, final FacetHolder holder, 
-            final DeploymentCategory deploymentCategory, final AuthenticationSessionProvider authenticationSessionProvider, final ServicesInjector dependencyInjector, final AdapterManager adapterManager) {
+            final Parser<?> parser,
+            final FacetHolder holder,
+            final ServicesInjector servicesInjector) {
         super(ParseableFacet.class, holder, Derivation.NOT_DERIVED);
         this.parser = parser;
-        this.deploymentCategory = deploymentCategory;
-        this.authenticationSessionProvider = authenticationSessionProvider;
-        this.dependencyInjector = dependencyInjector;
-        this.adapterManager = adapterManager;
+        this.authenticationSessionProvider = servicesInjector.getAuthenticationSessionProvider();
+        this.dependencyInjector = servicesInjector;
+        this.adapterManager = servicesInjector.getPersistenceSessionServiceInternal();
     }
 
     @Override
@@ -67,7 +66,10 @@ public class ParseableFacetUsingParser extends FacetAbstract implements Parseabl
     }
 
     @Override
-    public ObjectAdapter parseTextEntry(final ObjectAdapter contextAdapter, final String entry, Localization localization) {
+    public ObjectAdapter parseTextEntry(
+            final ObjectAdapter contextAdapter,
+            final String entry,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         if (entry == null) {
             throw new IllegalArgumentException("An entry must be provided");
         }
@@ -76,7 +78,11 @@ public class ParseableFacetUsingParser extends FacetAbstract implements Parseabl
         // (eg pick up any @RegEx on value type)
         if (getFacetHolder().containsFacet(ValueFacet.class)) {
             final ObjectAdapter entryAdapter = getAdapterManager().adapterFor(entry);
-            final ParseValueContext parseValueContext = new ParseValueContext(deploymentCategory, getAuthenticationSessionProvider().getAuthenticationSession(), InteractionInvocationMethod.BY_USER, contextAdapter, getIdentified().getIdentifier(), entryAdapter);
+            final Identifier identifier = getIdentified().getIdentifier();
+            final ParseValueContext parseValueContext =
+                    new ParseValueContext(
+                            contextAdapter, identifier, entryAdapter, interactionInitiatedBy
+                    );
             validate(parseValueContext);
         }
 
@@ -85,7 +91,7 @@ public class ParseableFacetUsingParser extends FacetAbstract implements Parseabl
         getDependencyInjector().injectServicesInto(parser);
 
         try {
-            final Object parsed = parser.parseTextEntry(context, entry, localization);
+            final Object parsed = parser.parseTextEntry(context, entry);
             if (parsed == null) {
                 return null;
             }
@@ -94,15 +100,14 @@ public class ParseableFacetUsingParser extends FacetAbstract implements Parseabl
             // (eg pick up any validate() methods on it)
             final ObjectAdapter adapter = getAdapterManager().adapterFor(parsed);
             final ObjectSpecification specification = adapter.getSpecification();
-            final ObjectValidityContext validateContext = specification.createValidityInteractionContext(deploymentCategory, getAuthenticationSessionProvider().getAuthenticationSession(), InteractionInvocationMethod.BY_USER, adapter);
+            final ObjectValidityContext validateContext =
+                    specification.createValidityInteractionContext(
+                            adapter, interactionInitiatedBy
+                    );
             validate(validateContext);
 
             return adapter;
-        } catch (final NumberFormatException e) {
-            throw new TextEntryParseException(e.getMessage(), e);
-        } catch (final IllegalFormatException e) {
-            throw new TextEntryParseException(e.getMessage(), e);
-        } catch (final ParsingException e) {
+        } catch (final NumberFormatException | IllegalFormatException | ParsingException e) {
             throw new TextEntryParseException(e.getMessage(), e);
         }
     }

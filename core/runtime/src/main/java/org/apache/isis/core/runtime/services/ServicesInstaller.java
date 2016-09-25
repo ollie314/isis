@@ -22,19 +22,17 @@ package org.apache.isis.core.runtime.services;
 import java.util.List;
 
 import org.apache.isis.core.commons.components.Installer;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
-import org.apache.isis.core.runtime.system.DeploymentType;
 
-public interface ServicesInstaller extends Installer, IsisConfigurationAware {
+public interface ServicesInstaller extends Installer {
+
+    void init();
 
     /**
      * NB: this has the suffix '-installer' because in the command line we must
      * distinguish from the '--services' flag meaning a particular set of
      * services to use (whereas this flag means how to locate them).
      */
-    static String TYPE = "services-installer";
+    String TYPE = "services-installer";
 
-    List<Object> getServices(DeploymentType deploymentType);
-
-    void setIgnoreFailures(boolean ignoreFailures);
+    List<Object> getServices();
 }

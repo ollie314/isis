@@ -22,10 +22,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import com.google.common.collect.Lists;
+
 import org.apache.isis.applib.annotation.LabelPosition;
-import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
 import org.apache.isis.core.commons.lang.StringExtensions;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
@@ -40,12 +40,11 @@ import org.apache.isis.core.metamodel.facets.TypedHolder;
  * required by the Apache Isis framework itself.
  * 
  */
-public class FallbackFacetFactory extends FacetFactoryAbstract implements IsisConfigurationAware {
+public class FallbackFacetFactory extends FacetFactoryAbstract {
 
     public final static int PAGE_SIZE_STANDALONE_DEFAULT = 25;
     public final static int PAGE_SIZE_PARENTED_DEFAULT = 12;
 
-    private IsisConfiguration configuration;
 
     @SuppressWarnings("unused")
     private final static Map<Class<?>, Integer> TYPICAL_LENGTHS_BY_CLASS = new HashMap<Class<?>, Integer>() {
@@ -171,13 +170,6 @@ public class FallbackFacetFactory extends FacetFactoryAbstract implements IsisCo
         return null;
     }
 
-    @Override
-    public void setConfiguration(IsisConfiguration configuration) {
-        this.configuration = configuration;
-    }
-    
-    public IsisConfiguration getConfiguration() {
-        return configuration;
-    }
+
 
 }

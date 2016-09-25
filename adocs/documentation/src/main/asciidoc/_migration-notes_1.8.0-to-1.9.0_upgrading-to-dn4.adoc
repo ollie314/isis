@@ -8,7 +8,7 @@
 
 Apache Isis 1.9.0 updates to DataNucleus 4.0.0, which requires some changes (simplifications) to the Maven configuration.
 
-If you starting a new app then you can start from the xref:ug.adoc#_ug_getting-started_simpleapp-archetype[SimpleApp archetype]; its Maven configuration has been updated.
+If you starting a new app then you can start from the xref:guides/ugfun.adoc#_ugfun_getting-started_simpleapp-archetype[SimpleApp archetype]; its Maven configuration has been updated.
 
 If you have an existing Apache Isis app that you want to upgrade, then you'll need to make some changes.
 
@@ -16,7 +16,7 @@ If you have an existing Apache Isis app that you want to upgrade, then you'll ne
 
 == In the parent `pom.xml`
 
-under the `<project>/<properties>`, remove:
+under the `project/properties`, remove:
 
 [source,xml]
 ----
@@ -30,7 +30,7 @@ under the `<project>/<properties>`, remove:
 
 == In `dom/pom.xml`,
 
-under `<build>/<plugins>`, remove:
+under `build/plugins`, remove:
 
 [source,xml]
 ----
@@ -55,7 +55,7 @@ under `<build>/<plugins>`, remove:
 </plugin>
 ----
 
-and (if you have it) under `<build>/<pluginManagement>/<plugins>`, remove:
+and (if you have it) under `build/pluginManagement/plugins`, remove:
 
 [source,xml]
 ----
@@ -93,7 +93,7 @@ and (if you have it) under `<build>/<pluginManagement>/<plugins>`, remove:
 ----
 
 
-and instead in `<profiles>` add:
+and instead, under `<profiles>` add:
 
 
 [source,xml]
@@ -104,7 +104,7 @@ and instead in `<profiles>` add:
         <activeByDefault>true</activeByDefault>
     </activation>
     <properties>
-        <datanucleus-maven-plugin.version>4.0.0-release</datanucleus-maven-plugin.version>
+        <datanucleus-maven-plugin.version>4.0.1</datanucleus-maven-plugin.version>
     </properties>
     <build>
         <pluginManagement>
@@ -202,7 +202,20 @@ isis.persistor.datanucleus.impl.datanucleus.schema.validateTables=true
 isis.persistor.datanucleus.impl.datanucleus.schema.validateConstraints=true
 ----
 
-and change:
+[NOTE]
+====
+Previously Apache Isis would automatically add the auto-create property if they were absent from `isis.properties`, set to "true".  The framework does still add the property, but now sets it to "false".  This is to prevent the framework from unexpectedly modifying a target database if the application was misconfigured and the auto-create property not defined.
+
+The framework will also automatically add the auto-validate property.  Previously this was set to "true" and it is _still_ set to "true"; there is no risk of the target database being modified as a result of this auto-validate property being defaulted by the framework.
+====
+
+[IMPORTANT]
+====
+Setting `autoCreateAll` to `true` is important to do when running with an in-memory database.  If you don't do this then the tables will be created lazily anyway by DataNucleus, but in some circumstances this can lead to deadlocks.
+====
+
+
+In addition, change:
 
 [source,ini]
 ----
@@ -217,15 +230,15 @@ isis.persistor.datanucleus.impl.datanucleus.identifier.case=MixedCase
 ----
 
 
-[WARNING]
-====
+
+== Run `mvn clean` !
+
 Be careful to ensure that your classes are only enhanced by the DataNucleus 4 enhancer, and _not_ by the DataNucleus 3 enhancer.  Or even, be careful that they are not doubly enhanced.  One of our committers had this situation and it led to all sorts of bizarre issues.  The solution, it turned out, was actually just to do a full `mvn clean`.
 
 If you are struggling and suspect you may have misconfigured the enhancer plugin, then you can decompile the bytecode (eg in IntelliJ) and take a look:
 
 * A class enhanced with DataNucleus 3 would implement `javax.jdo.spi.PersistenceCapable` interface
 * A class enhanced with DataNucleus 4 will implement `org.datanucleus.enhancer.Persistable`.
-====
 
 
 

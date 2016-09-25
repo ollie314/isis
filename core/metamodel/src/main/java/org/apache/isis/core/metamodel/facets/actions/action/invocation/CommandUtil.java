@@ -34,9 +34,15 @@ import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
 import org.apache.isis.core.metamodel.adapter.oid.Oid;
 import org.apache.isis.core.metamodel.adapter.oid.RootOid;
+import org.apache.isis.core.metamodel.facetapi.FacetUtil;
+import org.apache.isis.core.metamodel.facets.all.named.NamedFacet;
+import org.apache.isis.core.metamodel.facets.all.named.NamedFacetInferred;
+import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.core.metamodel.spec.feature.ObjectActionParameter;
-
+import org.apache.isis.core.metamodel.spec.feature.ObjectMember;
+import org.apache.isis.core.metamodel.specloader.specimpl.MixedInMember2;
+import org.apache.isis.core.metamodel.specloader.specimpl.ObjectActionDefault;
 
 /**
  * Factoring out the commonality between <tt>ActionInvocationFacetViaMethod</tt> and <tt>BackgroundServiceDefault</tt>.
@@ -45,19 +51,30 @@ public class CommandUtil {
 
     private CommandUtil(){}
 
-    public static String targetActionNameFor(ObjectAction owningAction) {
-        return owningAction.getName();
+    public static String targetMemberNameFor(final ObjectMember objectMember) {
+        return objectMember.getName();
     }
 
-    public static String targetClassNameFor(ObjectAdapter targetAdapter) {
+    public static String targetClassNameFor(final ObjectAdapter targetAdapter) {
         return StringExtensions.asNaturalName2(targetAdapter.getSpecification().getSingularName());
     }
 
-    public static String actionIdentifierFor(ObjectAction owningAction) {
-        return owningAction.getIdentifier().toClassAndNameIdentityString();
+    public static String memberIdentifierFor(final ObjectMember objectMember) {
+        return objectMember.getIdentifier().toClassAndNameIdentityString();
     }
 
-    public static String argDescriptionFor(ObjectAction owningAction, ObjectAdapter[] arguments) {
+    public static String argDescriptionFor(final ObjectAdapter valueAdapter) {
+        final StringBuilder buf = new StringBuilder();
+        if(valueAdapter != null) {
+            appendArg(buf, "new value", valueAdapter);
+        } else {
+            buf.append("cleared");
+        }
+        return buf.toString();
+    }
+    public static String argDescriptionFor(
+            final ObjectAction owningAction,
+            final ObjectAdapter[] arguments) {
         final StringBuilder argsBuf = new StringBuilder();
         List<ObjectActionParameter> parameters = owningAction.getParameters();
         if(parameters.size() == arguments.length) {
@@ -67,8 +84,7 @@ public class CommandUtil {
                 CommandUtil.appendParamArg(argsBuf, param, arguments[i++]);
             }
         }
-        String argsStr = argsBuf.toString();
-        return argsStr;
+        return argsBuf.toString();
     }
 
     public static Bookmark bookmarkFor(final ObjectAdapter adapter) {
@@ -80,12 +96,27 @@ public class CommandUtil {
         return rootOid.asBookmark();
     }
 
-    static void appendParamArg(final StringBuilder buf, ObjectActionParameter param, ObjectAdapter objectAdapter) {
-        String titleOf = objectAdapter != null? objectAdapter.titleString(null): "null";
-        buf.append(param.getName()).append(": ").append(titleOf).append("\n");
+    static void appendParamArg(
+            final StringBuilder buf,
+            final ObjectActionParameter param,
+            final ObjectAdapter objectAdapter) {
+        final String name = param.getName();
+        appendArg(buf, name, objectAdapter);
     }
 
-    public static void buildMementoArgLists(MementoService mementoService, BookmarkService bookmarkService, final Method method, final Object[] args, final List<Class<?>> argTypes, final List<Object> argObjs) {
+    private static void appendArg(
+            final StringBuilder buf,
+            final String name,
+            final ObjectAdapter objectAdapter) {
+        String titleOf = objectAdapter != null? objectAdapter.titleString(null): "null";
+        buf.append(name).append(": ").append(titleOf).append("\n");
+    }
+
+    public static void buildMementoArgLists(
+            final MementoService mementoService,
+            final BookmarkService bookmarkService,
+            final Method method,
+            final Object[] args, final List<Class<?>> argTypes, final List<Object> argObjs) {
         for (int i = 0; i < args.length; i++) {
             Object input = args[i];
             if (mementoService.canSet(input)) {

@@ -27,6 +27,8 @@ import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
+import org.apache.isis.applib.annotation.Programmatic;
+import org.apache.isis.applib.services.bookmark.Bookmark;
 import org.apache.isis.core.metamodel.adapter.oid.Oid.State;
 import org.apache.isis.core.metamodel.adapter.version.Version;
 import org.apache.isis.core.metamodel.spec.ObjectSpecId;
@@ -79,10 +81,21 @@ import org.apache.isis.core.metamodel.spec.ObjectSpecId;
  * <p>
  * Note that # and ; were not chosen as separators to minimize noise when URL encoding OIDs.
  */
-public class OidMarshaller {
+public final class OidMarshaller {
 
-	private static final String TRANSIENT_INDICATOR = "!";
-    public static final String VIEWMODEL_INDICATOR = "*";
+    public final static OidMarshaller INSTANCE = new OidMarshaller();
+
+    private OidMarshaller(){}
+
+    //region > public constants
+    public static final String VIEWMODEL_INDICATOR =
+            Bookmark.ObjectState.VIEW_MODEL.getCode(); // "*"
+    //endregion
+
+    //region > private constants
+    private static final String TRANSIENT_INDICATOR =
+            Bookmark.ObjectState.TRANSIENT.getCode() ; // "!"
+
 	private static final String SEPARATOR = ":";
 	private static final String SEPARATOR_NESTING = "~";
 	private static final String SEPARATOR_COLLECTION = "$";
@@ -113,31 +126,25 @@ public class OidMarshaller {
     		 		     SEPARATOR + DIGITS_GROUP + "?" +  // optional version UTC time
     		 		 ")?" + 
             		 "$");
+    //endregion
 
-    ////////////////////////////////////////////////////////////////
-    // constructor
-    ////////////////////////////////////////////////////////////////
-
-	public OidMarshaller() {}
-
-	
-    ////////////////////////////////////////////////////////////////
-    // join, split
-    ////////////////////////////////////////////////////////////////
-
-	public String joinAsOid(String domainType, String instanceId) {
+    //region > join, split
+    @Programmatic
+    public String joinAsOid(String domainType, String instanceId) {
 	    return domainType + SEPARATOR + instanceId;
 	}
-	
+
+    @Programmatic
     public String splitInstanceId(String oidStr) {
         final int indexOfSeperator = oidStr.indexOf(SEPARATOR);
         return indexOfSeperator > 0? oidStr.substring(indexOfSeperator+1): null;
     }
 
-    ////////////////////////////////////////////////////////////////
-    // unmarshal
-    ////////////////////////////////////////////////////////////////
+    //endregion
 
+    //region > unmarshal
+
+    @Programmatic
     @SuppressWarnings("unchecked")
 	public <T extends Oid> T unmarshal(String oidStr, Class<T> requestedType) {
         
@@ -155,8 +162,6 @@ public class OidMarshaller {
         } else {
             state = State.PERSISTENT;
         }
-        
-        final String rootOidStr = getGroup(matcher, 2);
         
         final String rootObjectType = getGroup(matcher, 4);
         final String rootIdentifier = getGroup(matcher, 5);
@@ -187,22 +192,19 @@ public class OidMarshaller {
 
         if(collectionName == null) {
             if(aggregateOidParts.isEmpty()) {
-                ensureCorrectType(oidStr, requestedType, RootOidDefault.class); 
-                return (T)new RootOidDefault(ObjectSpecId.of(rootObjectType), rootIdentifier, state, version);
+                ensureCorrectType(oidStr, requestedType, RootOid.class);
+                return (T) new RootOid(ObjectSpecId.of(rootObjectType), rootIdentifier, state, version);
             } else {
-                ensureCorrectType(oidStr, requestedType, AggregatedOid.class);
-                final AggregateOidPart lastPart = aggregateOidParts.remove(aggregateOidParts.size()-1);
-                final TypedOid parentOid = parentOidFor(rootOidStr, aggregateOidParts, version);
-                return (T)new AggregatedOid(ObjectSpecId.of(lastPart.objectType), parentOid, lastPart.localId);
+                throw new RuntimeException("Aggregated Oids are no longer supported");
             }
         } else {
             final String oidStrWithoutCollectionName = getGroup(matcher, 1);
             
             final String parentOidStr = oidStrWithoutCollectionName + marshal(version);
 
-            TypedOid parentOid = this.unmarshal(parentOidStr, TypedOid.class);
-            ensureCorrectType(oidStr, requestedType, CollectionOid.class);
-            return (T)new CollectionOid(parentOid, collectionName);
+            RootOid parentOid = this.unmarshal(parentOidStr, RootOid.class);
+            ensureCorrectType(oidStr, requestedType, ParentedCollectionOid.class);
+            return (T)new ParentedCollectionOid(parentOid, collectionName);
         }
     }
 
@@ -221,15 +223,6 @@ public class OidMarshaller {
     }
     
 
-    private TypedOid parentOidFor(final String rootOidStr, final List<AggregateOidPart> aggregateOidParts, Version version) {
-        final StringBuilder buf = new StringBuilder(rootOidStr);
-        for(AggregateOidPart part: aggregateOidParts) {
-            buf.append(part.toString());
-        }
-        buf.append(marshal(version));
-        return unmarshal(buf.toString(), TypedOid.class);
-    }
-
     private <T> void ensureCorrectType(String oidStr, Class<T> requestedType, final Class<? extends Oid> actualType) {
         if(!requestedType.isAssignableFrom(actualType)) {
             throw new IllegalArgumentException("OID '" + oidStr + "' does not represent a " +
@@ -246,37 +239,33 @@ public class OidMarshaller {
         return Strings.emptyToNull(val);
     }
 
-    
-    ////////////////////////////////////////////////////////////////
-    // marshal
-    ////////////////////////////////////////////////////////////////
 
+    //endregion
+
+    //region > marshal
+    @Programmatic
     public final String marshal(RootOid rootOid) {
         return marshalNoVersion(rootOid) + marshal(rootOid.getVersion());
     }
 
+    @Programmatic
     public final String marshalNoVersion(RootOid rootOid) {
         final String transientIndicator = rootOid.isTransient()? TRANSIENT_INDICATOR : "";
         final String viewModelIndicator = rootOid.isViewModel()? VIEWMODEL_INDICATOR : "";
         return transientIndicator + viewModelIndicator + rootOid.getObjectSpecId() + SEPARATOR + rootOid.getIdentifier();
     }
 
-    public final String marshal(CollectionOid collectionOid) {
+    @Programmatic
+    public final String marshal(ParentedCollectionOid collectionOid) {
         return marshalNoVersion(collectionOid) + marshal(collectionOid.getVersion());
     }
 
-    public String marshalNoVersion(CollectionOid collectionOid) {
-        return collectionOid.getParentOid().enStringNoVersion(this) + SEPARATOR_COLLECTION + collectionOid.getName();
+    @Programmatic
+    public String marshalNoVersion(ParentedCollectionOid collectionOid) {
+        return collectionOid.getRootOid().enStringNoVersion() + SEPARATOR_COLLECTION + collectionOid.getName();
     }
 
-    public final String marshal(AggregatedOid aggregatedOid) {
-        return marshalNoVersion(aggregatedOid) + marshal(aggregatedOid.getVersion());
-    }
-
-    public final String marshalNoVersion(AggregatedOid aggregatedOid) {
-        return aggregatedOid.getParentOid().enStringNoVersion(this) + SEPARATOR_NESTING + aggregatedOid.getObjectSpecId() + SEPARATOR + aggregatedOid.getLocalId();
-    }
-
+    @Programmatic
     public final String marshal(Version version) {
         if(version == null) {
             return "";
@@ -285,9 +274,9 @@ public class OidMarshaller {
         return SEPARATOR_VERSION + version.getSequence() + SEPARATOR + Strings.nullToEmpty(versionUser) + SEPARATOR + nullToEmpty(version.getUtcTimestamp());
     }
 
-
     private static String nullToEmpty(Object obj) {
         return obj == null? "": "" + obj;
     }
+    //endregion
 
 }

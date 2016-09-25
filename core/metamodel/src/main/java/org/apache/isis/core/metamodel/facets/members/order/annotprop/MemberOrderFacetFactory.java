@@ -30,12 +30,8 @@ import org.apache.isis.core.metamodel.facets.Annotations;
 import org.apache.isis.core.metamodel.facets.ContributeeMemberFacetFactory;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
 import org.apache.isis.core.metamodel.facets.members.order.MemberOrderFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjectorAware;
 
-public class MemberOrderFacetFactory extends FacetFactoryAbstract implements ContributeeMemberFacetFactory, ServicesInjectorAware {
-
-    private ServicesInjector servicesInjector;
+public class MemberOrderFacetFactory extends FacetFactoryAbstract implements ContributeeMemberFacetFactory {
 
     public MemberOrderFacetFactory() {
         super(FeatureType.MEMBERS);
@@ -93,9 +89,4 @@ public class MemberOrderFacetFactory extends FacetFactoryAbstract implements Con
         }
     }
 
-
-    @Override
-    public void setServicesInjector(final ServicesInjector servicesInjector) {
-        this.servicesInjector = servicesInjector;
-    }
 }

@@ -21,27 +21,24 @@ package org.apache.isis.core.metamodel.facets.object.parseable;
 
 import org.apache.isis.applib.adapters.Parser;
 import org.apache.isis.applib.annotation.Parseable;
-import org.apache.isis.applib.profiles.Localization;
-import org.apache.isis.core.commons.config.IsisConfigurationDefault;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryTest;
 import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessClassContext;
 import org.apache.isis.core.metamodel.facets.object.parseable.annotcfg.ParseableFacetAnnotationElseConfigurationFactory;
-import org.apache.isis.core.metamodel.runtimecontext.noruntime.RuntimeContextNoRuntime;
-import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryTest;
+import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 
 public class ParseableFacetAnnotationElseConfigurationFactoryTest extends AbstractFacetFactoryTest {
+    private JUnitRuleMockery2 context = JUnitRuleMockery2.createFor(JUnitRuleMockery2.Mode.INTERFACES_AND_CLASSES);
 
     private ParseableFacetAnnotationElseConfigurationFactory facetFactory;
-    private IsisConfigurationDefault isisConfigurationDefault;
+
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
 
         facetFactory = new ParseableFacetAnnotationElseConfigurationFactory();
-        isisConfigurationDefault = new IsisConfigurationDefault();
-        facetFactory.setConfiguration(isisConfigurationDefault);
-        facetFactory.setRuntimeContext(new RuntimeContextNoRuntime(DeploymentCategory.PRODUCTION));
+        facetFactory.setServicesInjector(stubServicesInjector);
+
     }
 
     @Override
@@ -94,7 +91,7 @@ public class ParseableFacetAnnotationElseConfigurationFactoryTest extends Abstra
 
     public static class ParserNoop<T> implements Parser<T> {
         @Override
-        public T parseTextEntry(final Object context, final String entry, Localization localization) {
+        public T parseTextEntry(final Object context, final String entry) {
             return null;
         }
 
@@ -104,7 +101,7 @@ public class ParseableFacetAnnotationElseConfigurationFactoryTest extends Abstra
         }
 
         @Override
-        public String displayTitleOf(final T object, final Localization localization) {
+        public String displayTitleOf(final T object) {
             return null;
         }
 
@@ -189,7 +186,7 @@ public class ParseableFacetAnnotationElseConfigurationFactoryTest extends Abstra
 
     public void testParserNameCanBePickedUpFromConfiguration() {
         final String className = "org.apache.isis.core.metamodel.facets.object.parseable.ParseableFacetAnnotationElseConfigurationFactoryTest$MyParseableWithParserSpecifiedUsingConfiguration";
-        isisConfigurationDefault.add(ParserUtil.PARSER_NAME_KEY_PREFIX + canonical(className) + ParserUtil.PARSER_NAME_KEY_SUFFIX, className);
+        stubConfiguration.add(ParserUtil.PARSER_NAME_KEY_PREFIX + canonical(className) + ParserUtil.PARSER_NAME_KEY_SUFFIX, className);
         facetFactory.process(new ProcessClassContext(MyParseableWithParserSpecifiedUsingConfiguration.class, methodRemover, facetedMethod));
         final ParseableFacetAbstract facet = (ParseableFacetAbstract) facetedMethod.getFacet(ParseableFacet.class);
         assertNotNull(facet);
@@ -207,7 +204,7 @@ public class ParseableFacetAnnotationElseConfigurationFactoryTest extends Abstra
 
     public void testNonAnnotatedParseableCanPickUpParserFromConfiguration() {
         final String className = "org.apache.isis.core.metamodel.facets.object.parseable.ParseableFacetAnnotationElseConfigurationFactoryTest$NonAnnotatedParseableParserSpecifiedUsingConfiguration";
-        isisConfigurationDefault.add(ParserUtil.PARSER_NAME_KEY_PREFIX + canonical(className) + ParserUtil.PARSER_NAME_KEY_SUFFIX, className);
+        stubConfiguration.add(ParserUtil.PARSER_NAME_KEY_PREFIX + canonical(className) + ParserUtil.PARSER_NAME_KEY_SUFFIX, className);
         facetFactory.process(new ProcessClassContext(NonAnnotatedParseableParserSpecifiedUsingConfiguration.class, methodRemover, facetedMethod));
         final ParseableFacetAbstract facet = (ParseableFacetAbstract) facetedMethod.getFacet(ParseableFacet.class);
         assertNotNull(facet);

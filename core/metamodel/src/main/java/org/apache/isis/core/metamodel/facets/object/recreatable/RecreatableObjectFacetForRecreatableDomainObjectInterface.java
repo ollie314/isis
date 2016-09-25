@@ -21,15 +21,20 @@ package org.apache.isis.core.metamodel.facets.object.recreatable;
 
 import org.apache.isis.applib.RecreatableDomainObject;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
+import org.apache.isis.core.metamodel.facets.PostConstructMethodCache;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 
 public class RecreatableObjectFacetForRecreatableDomainObjectInterface extends RecreatableObjectFacetAbstract {
 
-    public RecreatableObjectFacetForRecreatableDomainObjectInterface(final FacetHolder holder) {
-        super(holder, ArchitecturalLayer.DOMAIN);
+    public RecreatableObjectFacetForRecreatableDomainObjectInterface(
+            final FacetHolder holder,
+            final PostConstructMethodCache postConstructMethodCache,
+            final ServicesInjector servicesInjector) {
+        super(holder, ArchitecturalLayer.DOMAIN, RecreationMechanism.INITIALIZES, postConstructMethodCache, servicesInjector);
     }
 
     @Override
-    public void initialize(final Object pojo, final String memento) {
+    protected void doInitialize(final Object pojo, final String memento) {
         final RecreatableDomainObject viewModel = (RecreatableDomainObject)pojo;
         viewModel.__isis_recreate(memento);
     }

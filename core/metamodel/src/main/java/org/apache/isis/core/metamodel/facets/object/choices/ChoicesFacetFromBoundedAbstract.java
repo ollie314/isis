@@ -28,8 +28,11 @@ import org.apache.isis.applib.events.ValidityEvent;
 import org.apache.isis.applib.marker.Bounded;
 import org.apache.isis.applib.query.Query;
 import org.apache.isis.applib.query.QueryFindAllInstances;
+import org.apache.isis.core.commons.authentication.AuthenticationSession;
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.QuerySubmitter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetAbstract;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
@@ -39,6 +42,7 @@ import org.apache.isis.core.metamodel.interactions.ObjectValidityContext;
 import org.apache.isis.core.metamodel.interactions.UsabilityContext;
 import org.apache.isis.core.metamodel.interactions.ValidatingInteractionAdvisor;
 import org.apache.isis.core.metamodel.interactions.ValidityContext;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 
 /**
@@ -53,21 +57,31 @@ import org.apache.isis.core.metamodel.spec.ObjectSpecification;
  * member with {@link org.apache.isis.applib.annotation.Bounded Bounded} annotation
  * or implementing the {@link Bounded} marker interface.
  */
-public abstract class ChoicesFacetFromBoundedAbstract extends FacetAbstract implements ChoicesFacet, DisablingInteractionAdvisor, ValidatingInteractionAdvisor {
+public abstract class ChoicesFacetFromBoundedAbstract
+        extends FacetAbstract
+        implements ChoicesFacet, DisablingInteractionAdvisor, ValidatingInteractionAdvisor {
 
     public static Class<? extends Facet> type() {
         return ChoicesFacet.class;
     }
 
-    private final QuerySubmitter querySubmitter;
-    
-    public ChoicesFacetFromBoundedAbstract(final FacetHolder holder, final QuerySubmitter querySubmitter) {
+    private final DeploymentCategory deploymentCategory;
+    private final AuthenticationSessionProvider authenticationSessionProvider;
+    private final PersistenceSessionServiceInternal persistenceSessionServiceInternal;
+
+    public ChoicesFacetFromBoundedAbstract(
+            final FacetHolder holder,
+            final DeploymentCategory deploymentCategory,
+            final AuthenticationSessionProvider authenticationSessionProvider,
+            final PersistenceSessionServiceInternal persistenceSessionServiceInternal) {
         super(type(), holder, Derivation.NOT_DERIVED);
-        this.querySubmitter = querySubmitter;
+        this.deploymentCategory = deploymentCategory;
+        this.authenticationSessionProvider = authenticationSessionProvider;
+        this.persistenceSessionServiceInternal = persistenceSessionServiceInternal;
     }
 
-    protected QuerySubmitter getQuerySubmitter() {
-        return querySubmitter;
+    public PersistenceSessionServiceInternal getPersistenceSessionService() {
+        return persistenceSessionServiceInternal;
     }
 
     @Override
@@ -109,14 +123,25 @@ public abstract class ChoicesFacetFromBoundedAbstract extends FacetAbstract impl
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     @Override
-    public Object[] getChoices(ObjectAdapter adapter) {
+    public Object[] getChoices(
+            ObjectAdapter adapter,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         final Query query = new QueryFindAllInstances(getObjectSpecification().getFullIdentifier());
-        final List<ObjectAdapter> allInstancesAdapter = getQuerySubmitter().allMatchingQuery(query);
-        final List<ObjectAdapter> adapters = Lists.newArrayList(allInstancesAdapter.iterator());
+        final List<ObjectAdapter> allInstancesAdapter = getPersistenceSessionService().allMatchingQuery(query);
+
+        final List<ObjectAdapter> adapters =
+                ObjectAdapter.Util.visibleAdapters(
+                    allInstancesAdapter, interactionInitiatedBy);
+
         final List<Object> pojos = Lists.transform(adapters, ObjectAdapter.Functions.getObject());
         return Lists.newArrayList(pojos).toArray();
     }
 
+    protected DeploymentCategory getDeploymentCategory() {
+        return deploymentCategory;
+    }
 
-
+    protected AuthenticationSession getAuthenticationSession() {
+        return authenticationSessionProvider.getAuthenticationSession();
+    }
 }

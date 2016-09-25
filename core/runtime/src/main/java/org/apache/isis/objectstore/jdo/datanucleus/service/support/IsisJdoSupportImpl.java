@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
+import javax.inject.Inject;
 import javax.jdo.Extent;
 import javax.jdo.PersistenceManager;
 import javax.jdo.datastore.JDOConnection;
@@ -44,14 +45,12 @@ import org.apache.isis.applib.annotation.DomainService;
 import org.apache.isis.applib.annotation.NatureOfService;
 import org.apache.isis.applib.annotation.Programmatic;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager.ConcurrencyChecking;
-import org.apache.isis.core.metamodel.services.ServicesInjectorSpi;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.runtime.persistence.ObjectPersistenceException;
-import org.apache.isis.core.runtime.system.context.IsisContext;
 import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 import org.apache.isis.objectstore.jdo.applib.service.support.IsisJdoSupport;
-import org.apache.isis.objectstore.jdo.datanucleus.DataNucleusObjectStore;
 
 
 /**
@@ -68,16 +67,15 @@ public class IsisJdoSupportImpl implements IsisJdoSupport {
     @Programmatic
     @Override
     public <T> T refresh(final T domainObject) {
-        final DataNucleusObjectStore objectStore = getObjectStore();
-        final ObjectAdapter adapter = getAdapterManager().adapterFor(domainObject);
-        objectStore.refreshRoot(adapter);
+        final ObjectAdapter adapter = getPersistenceSession().adapterFor(domainObject);
+        getPersistenceSession().refreshRoot(adapter);
         return domainObject;
     }
 
     @Programmatic
     @Override
     public void ensureLoaded(final Collection<?> domainObjects) {
-        getObjectStore().getPersistenceManager().retrieveAll(domainObjects);
+        getPersistenceSession().getPersistenceManager().retrieveAll(domainObjects);
     }
 
     // //////////////////////////////////////
@@ -158,7 +156,7 @@ public class IsisJdoSupportImpl implements IsisJdoSupport {
             
             // temporarily disable concurrency checking while this method is performed
             try {
-                ConcurrencyChecking.executeWithConcurrencyCheckingDisabled(new Callable<Void>(){
+                ConcurrencyChecking.executeWithConcurrencyCheckingDisabled(new Callable<Void>() {
                     @Override
                     public Void call() {
                         getJdoPersistenceManager().deletePersistentAll(instances);
@@ -195,26 +193,20 @@ public class IsisJdoSupportImpl implements IsisJdoSupport {
 
     // //////////////////////////////////////
 
-    
-    protected DataNucleusObjectStore getObjectStore() {
-        return (DataNucleusObjectStore) getPersistenceSession().getObjectStore();
-    }
-
-    protected AdapterManager getAdapterManager() {
-        return getPersistenceSession().getAdapterManager();
-    }
+    @javax.inject.Inject
+    IsisSessionFactory isisSessionFactory;
 
     protected PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
+        return isisSessionFactory.getCurrentSession().getPersistenceSession();
     }
 
-    protected ServicesInjectorSpi getServicesInjector() {
-        return getPersistenceSession().getServicesInjector();
+    protected ServicesInjector getServicesInjector() {
+        return isisSessionFactory.getServicesInjector();
     }
 
     @Programmatic
     @Override
     public PersistenceManager getJdoPersistenceManager() {
-        return getObjectStore().getPersistenceManager();
+        return getPersistenceSession().getPersistenceManager();
     }
 }

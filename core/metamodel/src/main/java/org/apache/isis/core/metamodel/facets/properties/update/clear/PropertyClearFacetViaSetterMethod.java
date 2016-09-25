@@ -24,8 +24,10 @@ import java.util.Collections;
 import java.util.List;
 
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
+import org.apache.isis.core.metamodel.spec.feature.OneToOneAssociation;
 
 public class PropertyClearFacetViaSetterMethod extends PropertyClearFacetAbstract implements ImperativeFacet {
 
@@ -51,18 +53,11 @@ public class PropertyClearFacetViaSetterMethod extends PropertyClearFacetAbstrac
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
-
-    @Override
-    public boolean impliesObjectChanged() {
-        return true;
-    }
-
-    @Override
-    public void clearProperty(final ObjectAdapter owningAdapter) {
-        ObjectAdapter.InvokeUtils.invoke(method, owningAdapter);
+    public void clearProperty(
+            final OneToOneAssociation owningProperty,
+            final ObjectAdapter targetAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy) {
+        ObjectAdapter.InvokeUtils.invoke(method, targetAdapter);
     }
 
     @Override

@@ -17,6 +17,7 @@
 package org.apache.isis.viewer.restfulobjects.rendering.domainobjects;
 
 import com.fasterxml.jackson.databind.node.NullNode;
+
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
@@ -77,11 +78,17 @@ public abstract class AbstractObjectMemberReprRenderer<R extends ReprRendererAbs
      * <p>
      * Used to determine whether to follow links; only populated for {@link Mode#INLINE inline} Mode.
      */
-    private final String memberId;
+    private String memberId;
     private final Where where;
 
-    public AbstractObjectMemberReprRenderer(final RendererContext resourceContext, final LinkFollowSpecs linkFollower, String memberId, final RepresentationType representationType, final JsonRepresentation representation, Where where) {
-        super(resourceContext, linkFollower, representationType, representation);
+    public AbstractObjectMemberReprRenderer(
+            final RendererContext rendererContext,
+            final LinkFollowSpecs linkFollower,
+            final String memberId,
+            final RepresentationType representationType,
+            final JsonRepresentation representation,
+            final Where where) {
+        super(rendererContext, linkFollower, representationType, representation);
         this.memberId = memberId;
         this.where = where;
     }
@@ -90,11 +97,13 @@ public abstract class AbstractObjectMemberReprRenderer<R extends ReprRendererAbs
         return memberId;
     }
 
+
     @Override
     public R with(final ObjectAndMember<T> objectAndMember) {
         this.objectAdapter = objectAndMember.getObjectAdapter();
         this.objectMember = objectAndMember.getMember();
         this.objectMemberType = MemberType.determineFrom(objectMember);
+        this.memberId = objectMember.getId();
         usingLinkTo(new DomainObjectLinkTo());
 
         return cast(this);
@@ -254,7 +263,7 @@ public abstract class AbstractObjectMemberReprRenderer<R extends ReprRendererAbs
         
         // create a temporary map that looks the same as the member map we'll be following
         final JsonRepresentation memberMap = JsonRepresentation.newMap();
-        memberMap.mapPut(getMemberId(), this.representation);
+        memberMap.mapPut(getMemberId(), representation);
         if (membersLinkFollower.matches(memberMap) && detailsLinkFollower.matches(link)) {
             followDetailsLink(link);
         }
@@ -284,9 +293,12 @@ public abstract class AbstractObjectMemberReprRenderer<R extends ReprRendererAbs
         return visibility().isAllowed();
     }
 
+    /**
+     * Convenience method.
+     */
     protected <F extends Facet> F getMemberSpecFacet(final Class<F> facetType) {
-        final ObjectSpecification otoaSpec = objectMember.getSpecification();
-        return otoaSpec.getFacet(facetType);
+        final ObjectSpecification objetMemberSpec = objectMember.getSpecification();
+        return objetMemberSpec.getFacet(facetType);
     }
 
     protected boolean hasMemberFacet(final Class<? extends Facet> facetType) {
@@ -294,11 +306,11 @@ public abstract class AbstractObjectMemberReprRenderer<R extends ReprRendererAbs
     }
 
     protected Consent usability() {
-        return objectMember.isUsable(getRendererContext().getAuthenticationSession(), objectAdapter, where);
+        return objectMember.isUsable(objectAdapter, getInteractionInitiatedBy(), where);
     }
 
     protected Consent visibility() {
-        return objectMember.isVisible(getRendererContext().getAuthenticationSession(), objectAdapter, where);
+        return objectMember.isVisible(objectAdapter, getInteractionInitiatedBy(), where);
     }
 
 }

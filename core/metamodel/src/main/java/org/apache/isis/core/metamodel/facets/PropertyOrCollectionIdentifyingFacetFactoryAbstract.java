@@ -20,24 +20,27 @@
 package org.apache.isis.core.metamodel.facets;
 
 import java.util.List;
+
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
-import org.apache.isis.core.metamodel.specloader.collectiontyperegistry.CollectionTypeRegistry;
+import org.apache.isis.core.metamodel.specloader.CollectionUtils;
 
-public abstract class PropertyOrCollectionIdentifyingFacetFactoryAbstract extends MethodPrefixBasedFacetFactoryAbstract implements PropertyOrCollectionIdentifyingFacetFactory {
+public abstract class PropertyOrCollectionIdentifyingFacetFactoryAbstract
+        extends MethodPrefixBasedFacetFactoryAbstract
+        implements PropertyOrCollectionIdentifyingFacetFactory {
 
-    private final CollectionTypeRegistry collectionTypeRegistry = new CollectionTypeRegistry();
 
     public PropertyOrCollectionIdentifyingFacetFactoryAbstract(final List<FeatureType> featureTypes, final String... prefixes) {
         super(featureTypes, OrphanValidation.DONT_VALIDATE, prefixes);
     }
 
+
+    // //////////////////////////////////////
+
     protected boolean isCollectionOrArray(final Class<?> cls) {
-        return getCollectionTypeRepository().isCollectionType(cls) || getCollectionTypeRepository().isArrayType(cls);
+        return CollectionUtils.isCollectionType(cls) || CollectionUtils.isArrayType(cls);
     }
 
-    protected CollectionTypeRegistry getCollectionTypeRepository() {
-        return collectionTypeRegistry;
-    }
+
 
 
 }

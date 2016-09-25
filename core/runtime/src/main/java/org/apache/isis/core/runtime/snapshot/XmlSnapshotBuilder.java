@@ -23,10 +23,9 @@ import java.util.List;
 import com.google.common.collect.Lists;
 
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.oid.OidMarshaller;
 import org.apache.isis.core.runtime.system.context.IsisContext;
 import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 
 /**
  * Builds an {@link XmlSnapshot} using a fluent use through a builder:
@@ -40,7 +39,6 @@ public class XmlSnapshotBuilder {
 
     private final Object domainObject;
     private XmlSchema schema;
-    private OidMarshaller oidMarshaller = new OidMarshaller();
 
     static class PathAndAnnotation {
         public PathAndAnnotation(final String path, final String annotation) {
@@ -63,11 +61,6 @@ public class XmlSnapshotBuilder {
         return this;
     }
 
-    public XmlSnapshotBuilder usingOidMarshaller(final OidMarshaller oidMarshaller) {
-        this.oidMarshaller = oidMarshaller;
-        return this;
-    }
-
     public XmlSnapshotBuilder includePath(final String path) {
         return includePathAndAnnotation(path, null);
     }
@@ -78,8 +71,8 @@ public class XmlSnapshotBuilder {
     }
 
     public XmlSnapshot build() {
-        final ObjectAdapter adapter = getAdapterManager().adapterFor(domainObject);
-        final XmlSnapshot snapshot = (schema != null) ? new XmlSnapshot(adapter, schema, oidMarshaller) : new XmlSnapshot(adapter, oidMarshaller);
+        final ObjectAdapter adapter = getPersistenceSession().adapterFor(domainObject);
+        final XmlSnapshot snapshot = (schema != null) ? new XmlSnapshot(adapter, schema) : new XmlSnapshot(adapter);
         for (final XmlSnapshotBuilder.PathAndAnnotation paa : paths) {
             if (paa.annotation != null) {
                 snapshot.include(paa.path, paa.annotation);
@@ -94,11 +87,11 @@ public class XmlSnapshotBuilder {
     // Dependencies (from context)
     // ///////////////////////////////////////////////////////
 
-    private static AdapterManager getAdapterManager() {
-        return getPersistenceSession().getAdapterManager();
+    private static PersistenceSession getPersistenceSession() {
+        return getIsisSessionFactory().getCurrentSession().getPersistenceSession();
     }
 
-    private static PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
+    static IsisSessionFactory getIsisSessionFactory() {
+        return IsisContext.getSessionFactory();
     }
 }

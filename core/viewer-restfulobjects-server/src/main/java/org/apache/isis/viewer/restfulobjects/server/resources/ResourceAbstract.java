@@ -20,26 +20,36 @@ package org.apache.isis.viewer.restfulobjects.server.resources;
 
 import java.io.InputStream;
 import java.util.List;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.ws.rs.core.*;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.Request;
+import javax.ws.rs.core.SecurityContext;
+import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.Providers;
 
 import org.apache.isis.applib.annotation.Where;
-import org.apache.isis.applib.profiles.Localization;
+import org.apache.isis.applib.services.command.Command;
+import org.apache.isis.applib.services.command.CommandContext;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.commons.config.IsisConfiguration;
 import org.apache.isis.core.commons.url.UrlEncodingUtils;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.oid.OidMarshaller;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.services.ServiceUtil;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
+import org.apache.isis.core.runtime.authentication.AuthenticationManager;
 import org.apache.isis.core.runtime.system.context.IsisContext;
 import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 import org.apache.isis.viewer.restfulobjects.applib.RepresentationType;
 import org.apache.isis.viewer.restfulobjects.applib.client.RestfulResponse.HttpStatusCode;
 import org.apache.isis.viewer.restfulobjects.rendering.RestfulObjectsApplicationException;
+import org.apache.isis.viewer.restfulobjects.rendering.service.RepresentationService;
 import org.apache.isis.viewer.restfulobjects.rendering.util.Util;
 import org.apache.isis.viewer.restfulobjects.server.ResourceContext;
 import org.apache.isis.viewer.restfulobjects.server.util.OidUtils;
@@ -70,13 +80,18 @@ public abstract class ResourceAbstract {
 
     private ResourceContext resourceContext;
 
-    protected void init(final Where where) {
-        init(RepresentationType.GENERIC, where);
+    protected void init(
+            final Where where,
+            final RepresentationService.Intent intent) {
+        init(RepresentationType.GENERIC, where, intent);
     }
 
-    protected void init(final RepresentationType representationType, Where where) {
+    protected void init(
+            final RepresentationType representationType,
+            Where where,
+            final RepresentationService.Intent intent) {
         String queryStringIfAny = getUrlDecodedQueryStringIfAny();
-        init(representationType, where, queryStringIfAny);
+        init(representationType, where, intent, queryStringIfAny);
     }
 
     private String getUrlDecodedQueryStringIfAny() {
@@ -87,16 +102,18 @@ public abstract class ResourceAbstract {
     protected void init(
             final RepresentationType representationType,
             final Where where,
+            final RepresentationService.Intent intent,
             final InputStream arguments) {
         final String urlDecodedQueryString = Util.asStringUtf8(arguments);
-        init(representationType, where, urlDecodedQueryString);
+        init(representationType, where, intent, urlDecodedQueryString);
     }
 
     protected void init(
             final RepresentationType representationType,
             final Where where,
+            final RepresentationService.Intent intent,
             final String urlUnencodedQueryString) {
-        if (!IsisContext.inSession()) {
+        if (!getIsisSessionFactory().inSession()) {
             throw RestfulObjectsApplicationException.create(HttpStatusCode.UNAUTHORIZED);
         }
         if (getAuthenticationSession() == null) {
@@ -104,12 +121,18 @@ public abstract class ResourceAbstract {
         }
 
         this.resourceContext = new ResourceContext(
-                representationType, httpHeaders, providers, uriInfo, request, where, urlUnencodedQueryString, httpServletRequest, httpServletResponse,
-                securityContext, getLocalization(), getAuthenticationSession(), getPersistenceSession(), getAdapterManager(), getSpecificationLoader(), getConfiguration());
+                representationType, httpHeaders, providers, uriInfo, request, where, intent, urlUnencodedQueryString, httpServletRequest, httpServletResponse,
+                securityContext,
+                InteractionInitiatedBy.USER);
     }
 
     protected ResourceContext getResourceContext() {
         return resourceContext;
+    }
+
+
+    protected void setCommandExecutor(Command.Executor executor) {
+        getServicesInjector().lookupServiceElseFail(CommandContext.class).getCommand().setExecutor(executor);
     }
 
     // //////////////////////////////////////////////////////////////
@@ -147,32 +170,36 @@ public abstract class ResourceAbstract {
     // Dependencies (from singletons)
     // //////////////////////////////////////////////////////////////
 
+    protected DeploymentCategory getDeploymentCategory() {
+        return getIsisSessionFactory().getDeploymentCategory();
+    }
+
     protected IsisConfiguration getConfiguration () {
-        return IsisContext.getConfiguration();
+        return getIsisSessionFactory().getConfiguration();
+    }
+
+    protected ServicesInjector getServicesInjector () {
+        return getIsisSessionFactory().getServicesInjector();
     }
 
     protected AuthenticationSession getAuthenticationSession() {
-        return IsisContext.getAuthenticationSession();
+        return getIsisSessionFactory().getCurrentSession().getAuthenticationSession();
     }
 
-    protected SpecificationLoaderSpi getSpecificationLoader() {
-        return IsisContext.getSpecificationLoader();
+    protected AuthenticationManager getAuthenticationManager() {
+        return getIsisSessionFactory().getAuthenticationManager();
     }
 
-    protected AdapterManager getAdapterManager() {
-        return getPersistenceSession().getAdapterManager();
+    protected SpecificationLoader getSpecificationLoader() {
+        return getIsisSessionFactory().getSpecificationLoader();
     }
 
     protected PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
+        return getIsisSessionFactory().getCurrentSession().getPersistenceSession();
     }
 
-    protected Localization getLocalization() {
-        return IsisContext.getLocalization();
-    }
-
-    protected OidMarshaller getOidMarshaller() {
-        return IsisContext.getOidMarshaller();
+    protected IsisSessionFactory getIsisSessionFactory() {
+        return IsisContext.getSessionFactory();
     }
 
     // //////////////////////////////////////////////////////////////

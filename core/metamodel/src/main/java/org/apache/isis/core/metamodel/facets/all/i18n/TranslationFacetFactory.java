@@ -20,6 +20,7 @@ package org.apache.isis.core.metamodel.facets.all.i18n;
 
 
 import com.google.common.base.Strings;
+
 import org.apache.isis.applib.services.i18n.TranslationService;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
@@ -29,12 +30,9 @@ import org.apache.isis.core.metamodel.facets.ContributeeMemberFacetFactory;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
 import org.apache.isis.core.metamodel.facets.all.describedas.DescribedAsFacet;
 import org.apache.isis.core.metamodel.facets.all.named.NamedFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjectorAware;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 
-public class TranslationFacetFactory extends FacetFactoryAbstract implements ContributeeMemberFacetFactory, ServicesInjectorAware {
-
-    private ServicesInjector servicesInjector;
+public class TranslationFacetFactory extends FacetFactoryAbstract implements ContributeeMemberFacetFactory {
 
     private TranslationService translationService;
 
@@ -95,7 +93,9 @@ public class TranslationFacetFactory extends FacetFactoryAbstract implements Con
         }
 
         final TranslationService translationService = lookupTranslationService();
-        FacetUtil.addFacet(new NamedFacetTranslated(context, originalText, translationService, facetHolder));
+        NamedFacetTranslated facetTranslated = new NamedFacetTranslated(context, originalText, translationService, facetHolder);
+        facetTranslated.setUnderlyingFacet(facet);
+        FacetUtil.addFacet(facetTranslated);
     }
 
     void translateDescription(final FacetHolder facetHolder, final String context) {
@@ -122,7 +122,7 @@ public class TranslationFacetFactory extends FacetFactoryAbstract implements Con
     // //////////////////////////////////////
 
     /**
-     * Looks up from {@link org.apache.isis.core.metamodel.runtimecontext.ServicesInjector}.
+     * Looks up from {@link ServicesInjector}.
      *
      * <p>
      *     There is guaranteed to be an instance because <code>TranslationServicePo</code> (in runtime) is annotated
@@ -136,8 +136,4 @@ public class TranslationFacetFactory extends FacetFactoryAbstract implements Con
         return translationService;
     }
 
-    @Override
-    public void setServicesInjector(final ServicesInjector servicesInjector) {
-        this.servicesInjector = servicesInjector;
-    }
 }

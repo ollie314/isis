@@ -25,7 +25,7 @@ import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
 
 /**
- * Not registered in the XSD schema (as a JAXB binding, because can only map xs:dateTime once (and have chosen to map to LocalDateTime).
+ * Note: not actually registered as a JAXB adapter.
  */
 public final class JodaDateTimeStringAdapter {
     private JodaDateTimeStringAdapter() {
@@ -38,7 +38,10 @@ public final class JodaDateTimeStringAdapter {
     }
 
     public static String print(final DateTime date) {
-        return date != null? date.toString(): null;
+        if (date == null) {
+            return null;
+        }
+        return formatter.print(date);
     }
 
 }

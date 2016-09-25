@@ -19,16 +19,16 @@
 
 package org.apache.isis.core.metamodel.specloader.specimpl;
 
+import org.jmock.Expectations;
 import org.jmock.auto.Mock;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+
 import org.apache.isis.applib.annotation.When;
 import org.apache.isis.applib.annotation.Where;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
@@ -37,9 +37,10 @@ import org.apache.isis.core.metamodel.facets.all.hide.HiddenFacet;
 import org.apache.isis.core.metamodel.facets.members.hidden.HiddenFacetAbstract;
 import org.apache.isis.core.metamodel.interactions.UsabilityContext;
 import org.apache.isis.core.metamodel.interactions.VisibilityContext;
-import org.apache.isis.core.metamodel.spec.Instance;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.feature.ObjectMemberContext;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2.Mode;
 
@@ -57,6 +58,13 @@ public class ObjectAssociationAbstractTest_alwaysHidden {
     @Mock
     private ObjectSpecification mockObjectSpecification;
 
+    @Mock
+    private ServicesInjector mockServicesInjector;
+    @Mock
+    private SpecificationLoader mockSpecificationLoader;
+    @Mock
+    private PersistenceSessionServiceInternal mockPersistenceSessionServiceInternal;
+
     public static class Customer {
         public String getFirstName() {
             return null;
@@ -66,23 +74,35 @@ public class ObjectAssociationAbstractTest_alwaysHidden {
     @Before
     public void setup() {
         facetedMethod = FacetedMethod.createForProperty(Customer.class, "firstName");
-        
+
+        context.checking(new Expectations() {{
+            allowing(mockServicesInjector).getSpecificationLoader();
+            will(returnValue(mockSpecificationLoader));
+
+            allowing(mockServicesInjector).getPersistenceSessionServiceInternal();
+            will(returnValue(mockPersistenceSessionServiceInternal));
+        }});
+
         objectAssociation = new ObjectAssociationAbstract(
                 facetedMethod, FeatureType.PROPERTY, mockObjectSpecification,
-                new ObjectMemberContext(DeploymentCategory.PRODUCTION, null, null, null, null, null)) {
+                mockServicesInjector) {
 
             @Override
-            public ObjectAdapter get(final ObjectAdapter fromObject) {
+            public ObjectAdapter get(
+                    final ObjectAdapter fromObject,
+                    final InteractionInitiatedBy interactionInitiatedBy) {
                 return null;
             }
 
             @Override
-            public boolean isEmpty(final ObjectAdapter adapter) {
+            public boolean isEmpty(final ObjectAdapter adapter, final InteractionInitiatedBy interactionInitiatedBy) {
                 return false;
             }
 
             @Override
-            public ObjectAdapter[] getChoices(final ObjectAdapter object) {
+            public ObjectAdapter[] getChoices(
+                    final ObjectAdapter object,
+                    final InteractionInitiatedBy interactionInitiatedBy) {
                 return null;
             }
 
@@ -96,22 +116,16 @@ public class ObjectAssociationAbstractTest_alwaysHidden {
             }
 
             @Override
-            public UsabilityContext<?> createUsableInteractionContext(final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter target, final Where where) {
+            public UsabilityContext<?> createUsableInteractionContext(
+                    final ObjectAdapter target, final InteractionInitiatedBy interactionInitiatedBy,
+                    final Where where) {
                 return null;
             }
 
             @Override
-            public VisibilityContext<?> createVisibleInteractionContext(final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter targetObjectAdapter, final Where where) {
-                return null;
-            }
-
-            @Override
-            public String debugData() {
-                return null;
-            }
-
-            @Override
-            public Instance getInstance(final ObjectAdapter adapter) {
+            public VisibilityContext<?> createVisibleInteractionContext(
+                    final ObjectAdapter targetObjectAdapter, final InteractionInitiatedBy interactionInitiatedBy,
+                    final Where where) {
                 return null;
             }
 
@@ -126,7 +140,10 @@ public class ObjectAssociationAbstractTest_alwaysHidden {
             }
 
             @Override
-            public ObjectAdapter[] getAutoComplete(ObjectAdapter object, String searchArg) {
+            public ObjectAdapter[] getAutoComplete(
+                    final ObjectAdapter object,
+                    final String searchArg,
+                    final InteractionInitiatedBy interactionInitiatedBy) {
                 return null;
             }
             @Override

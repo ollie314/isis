@@ -25,6 +25,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import org.apache.isis.applib.services.eventbus.ActionDomainEvent;
+import org.apache.isis.applib.services.publish.PublisherService;
 
 /**
  * Domain semantics for domain object collection.
@@ -88,7 +89,7 @@ public @interface Action {
 
 
     /**
-     * The action semantics, either {@link SemanticsOf#SAFE safe} (query-only),
+     * The action semantics, either {@link SemanticsOf#SAFE_AND_REQUEST_CACHEABLE cached}, {@link SemanticsOf#SAFE safe} (query-only),
      * {@link SemanticsOf#IDEMPOTENT idempotent} or
      * {@link SemanticsOf#NON_IDEMPOTENT non-idempotent}.
      */
@@ -150,14 +151,16 @@ public @interface Action {
      * Whether the action invocation should be published.
      *
      * <p>
-     * Requires that an implementation of the {@link org.apache.isis.applib.services.publish.PublishingService} is
-     * registered with the framework.
+     * Requires that an implementation of the {@link org.apache.isis.applib.services.publish.PublishingService}
+     * or {@link org.apache.isis.applib.services.publish.PublisherService} is registered with the framework.
      * </p>
      */
     Publishing publishing() default Publishing.AS_CONFIGURED;
 
-
-    // TODO: factor out PayloadFactory.Default so similar to interaction
+    /**
+     * @deprecated - not supported by {@link PublisherService}.
+     */
+    @Deprecated
     Class<? extends PublishingPayloadFactoryForAction> publishingPayloadFactory() default PublishingPayloadFactoryForAction.class;
 
 

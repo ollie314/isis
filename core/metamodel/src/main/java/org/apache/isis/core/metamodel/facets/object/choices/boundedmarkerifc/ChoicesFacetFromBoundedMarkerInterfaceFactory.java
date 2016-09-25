@@ -22,17 +22,17 @@ package org.apache.isis.core.metamodel.facets.object.choices.boundedmarkerifc;
 import java.lang.reflect.Method;
 
 import org.apache.isis.applib.marker.Bounded;
-import org.apache.isis.core.metamodel.adapter.QuerySubmitter;
-import org.apache.isis.core.metamodel.adapter.QuerySubmitterAware;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
 import org.apache.isis.core.metamodel.facets.objectvalue.choices.ChoicesFacet;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 
-public class ChoicesFacetFromBoundedMarkerInterfaceFactory extends FacetFactoryAbstract implements QuerySubmitterAware {
+public class ChoicesFacetFromBoundedMarkerInterfaceFactory extends FacetFactoryAbstract {
 
-    private QuerySubmitter querySubmitter;
+    private PersistenceSessionServiceInternal persistenceSessionServiceInternal;
 
     public ChoicesFacetFromBoundedMarkerInterfaceFactory() {
         super(FeatureType.OBJECTS_ONLY);
@@ -44,8 +44,13 @@ public class ChoicesFacetFromBoundedMarkerInterfaceFactory extends FacetFactoryA
         FacetUtil.addFacet(create(implementsMarker, processClassContaxt.getFacetHolder()));
     }
 
-    private ChoicesFacet create(final boolean implementsMarker, final FacetHolder holder) {
-        return implementsMarker ? new ChoicesFacetFromBoundedMarkerInterface(holder, querySubmitter) : null;
+    private ChoicesFacet create(
+            final boolean implementsMarker,
+            final FacetHolder holder) {
+        return implementsMarker
+                ? new ChoicesFacetFromBoundedMarkerInterface(
+                    holder, getDeploymentCategory(), getAuthenticationSessionProvider(),
+                persistenceSessionServiceInternal) : null;
     }
 
     public boolean recognizes(final Method method) {
@@ -53,8 +58,9 @@ public class ChoicesFacetFromBoundedMarkerInterfaceFactory extends FacetFactoryA
     }
 
     @Override
-    public void setQuerySubmitter(QuerySubmitter querySubmitter) {
-        this.querySubmitter = querySubmitter;
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        this.persistenceSessionServiceInternal = servicesInjector.getPersistenceSessionServiceInternal();
     }
 
 }

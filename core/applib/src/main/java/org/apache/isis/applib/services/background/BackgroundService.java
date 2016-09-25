@@ -39,18 +39,22 @@ import org.apache.isis.applib.annotation.Programmatic;
 public interface BackgroundService {
 
     /**
-     * Returns a proxy around the object which is then used to obtain the
+     * Returns a proxy around the object (entity or view model) which is then used to obtain the
      * signature of the action to be invoked in the background.
+     *
+     * <p>
+     *     To obtain a proxy for a mixin, use {@link BackgroundService2#executeMixin(Class, Object)}.
+     * </p>
      */
     @Programmatic
     <T> T execute(final T object);
 
     /**
      * Not API: for framework use only.
-     * @param domainObject
-     * @param args
-     * @return
+     *
+     * @deprecated - no longer called by the framework (moved to <tt>InteractionDtoServiceInternal</tt>, an internal SPI service).
      */
+    @Deprecated
     @Programmatic
     ActionInvocationMemento asActionInvocationMemento(Method m, Object domainObject, Object[] args);
 

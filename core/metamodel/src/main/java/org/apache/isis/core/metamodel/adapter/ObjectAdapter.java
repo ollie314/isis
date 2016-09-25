@@ -26,17 +26,23 @@ import java.util.Map;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
 
+import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.core.commons.lang.ClassExtensions;
 import org.apache.isis.core.commons.lang.ListExtensions;
 import org.apache.isis.core.commons.lang.MethodExtensions;
 import org.apache.isis.core.commons.lang.MethodUtil;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.oid.AggregatedOid;
-import org.apache.isis.core.metamodel.adapter.oid.CollectionOid;
+import org.apache.isis.core.metamodel.adapter.oid.ParentedCollectionOid;
 import org.apache.isis.core.metamodel.adapter.oid.Oid;
 import org.apache.isis.core.metamodel.adapter.version.ConcurrencyException;
 import org.apache.isis.core.metamodel.adapter.version.Version;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.consent.InteractionResult;
+import org.apache.isis.core.metamodel.facets.collections.modify.CollectionFacet;
 import org.apache.isis.core.metamodel.facets.object.title.TitleFacet;
+import org.apache.isis.core.metamodel.interactions.InteractionUtils;
+import org.apache.isis.core.metamodel.interactions.ObjectVisibilityContext;
+import org.apache.isis.core.metamodel.interactions.VisibilityContext;
 import org.apache.isis.core.metamodel.spec.ElementSpecificationProvider;
 import org.apache.isis.core.metamodel.spec.Instance;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
@@ -75,7 +81,7 @@ public interface ObjectAdapter extends Instance, org.apache.isis.applib.annotati
      * of some other adapter.
      * 
      * <p>
-     * @see TitleFacet#title(ObjectAdapter, ObjectAdapter, org.apache.isis.applib.profiles.Localization)
+     * @see TitleFacet#title(ObjectAdapter, ObjectAdapter)
      */
     String titleString(ObjectAdapter contextAdapter);
 
@@ -141,13 +147,6 @@ public interface ObjectAdapter extends Instance, org.apache.isis.applib.annotati
     String getIconName();
 
     /**
-     * Changes the 'lazy loaded' state of the domain object.
-     * 
-     * @see ResolveState
-     */
-    void changeState(ResolveState newState);
-
-    /**
      * Checks the version of this adapter to make sure that it does not differ
      * from the specified version.
      * 
@@ -178,54 +177,21 @@ public interface ObjectAdapter extends Instance, org.apache.isis.applib.annotati
     void replaceOid(Oid persistedOid);
 
     /**
-     * Determines what 'lazy loaded' state the domain object is in.
-     * 
-     * @see ResolveState
+     * Returns either itself (if this is a root) or the parented collections, the
+     * adapter corresponding to their {@link ParentedCollectionOid#getRootOid() root oid}.
      */
-    ResolveState getResolveState();
+    ObjectAdapter getAggregateRoot();
 
-
-    /**
-     * Whether the object is persisted.
-     * 
-     * <p>
-     * Note: not necessarily the reciprocal of {@link #isTransient()};
-     * standalone adapters (with {@link ResolveState#VALUE}) report as neither
-     * persistent or transient.
-     */
-    boolean representsPersistent();
-
-    boolean isNew();
-    boolean isTransient();
-
-    boolean isGhost();
-    boolean isResolved();
-
-    boolean isResolving();
-    boolean isUpdating();
-
-    boolean isDestroyed();
-
-
-    boolean canTransitionToResolving();
-    void markAsResolvedIfPossible();
-
-    
     Version getVersion();
-
     void setVersion(Version version);
+
 
     /**
      * Whether this instance belongs to another object (meaning its
-     * {@link #getOid()} will be <tt>ParentedOid</tt>, either an 
-     * {@link AggregatedOid} or a {@link CollectionOid}).
+     * {@link #getOid()} will be a {@link ParentedCollectionOid}).
      */
-    boolean isParented();
+    boolean isParentedCollection();
 
-    /**
-     * Whether this is an aggregated Oid.
-     */
-    boolean isAggregated();
 
     /**
      * Whether this is a value (standalone, has no oid).
@@ -233,18 +199,6 @@ public interface ObjectAdapter extends Instance, org.apache.isis.applib.annotati
     boolean isValue();
 
 
-    /**
-     * Either the aggregate root (either itself or, if parented, then its parent adapter).
-     * 
-     * TODO: should this be recursive, to support root->aggregate->aggregate etc.
-     */
-    ObjectAdapter getAggregateRoot();
-
-    boolean respondToChangesInPersistentObjects();
-
-
-    
-    
     public final class Util {
 
         private Util() {
@@ -331,7 +285,80 @@ public interface ObjectAdapter extends Instance, org.apache.isis.applib.annotati
             return false;
         }
 
+        /**
+         * Filters a collection (an adapter around either a Collection or an Object[]) and returns a list of
+         * {@link ObjectAdapter}s of those that are visible (as per any facet(s) installed on the element class
+         * of the collection).
+         *  @param collectionAdapter - an adapter around a collection (as returned by a getter of a collection, or of an autoCompleteNXxx() or choicesNXxx() method, etc
+         * @param interactionInitiatedBy
+         */
+        public static List<ObjectAdapter> visibleAdapters(
+                final ObjectAdapter collectionAdapter,
+                final InteractionInitiatedBy interactionInitiatedBy) {
+
+            final CollectionFacet facet = CollectionFacet.Utils.getCollectionFacetFromSpec(collectionAdapter);
+            Iterable<ObjectAdapter> objectAdapters = facet.iterable(collectionAdapter);
+
+            return visibleAdapters(objectAdapters, interactionInitiatedBy);
+        }
+
+        /**
+         * as per {@link #visibleAdapters(ObjectAdapter, InteractionInitiatedBy)}.
+         *  @param objectAdapters - iterable over the respective adapters of a collection (as returned by a getter of a collection, or of an autoCompleteNXxx() or choicesNXxx() method, etc
+         * @param interactionInitiatedBy
+         */
+        public static List<ObjectAdapter> visibleAdapters(
+                final Iterable<ObjectAdapter> objectAdapters,
+                final InteractionInitiatedBy interactionInitiatedBy) {
+            final List<ObjectAdapter> adapters = Lists.newArrayList();
+            for (final ObjectAdapter adapter : objectAdapters) {
+                final boolean visible = isVisible(adapter,
+                        interactionInitiatedBy);
+                if(visible) {
+                    adapters.add(adapter);
+                }
+            }
+            return adapters;
+        }
+
+        /**
+         * @param adapter - an adapter around the domain object whose visibility is being checked
+         * @param interactionInitiatedBy
+         */
+        public static boolean isVisible(
+                final ObjectAdapter adapter,
+                final InteractionInitiatedBy interactionInitiatedBy) {
+            if(adapter == null) {
+                // a choices list could include a null (eg example in ToDoItems#choices1Categorized()); want to show as "visible"
+                return true;
+            }
+            if(adapter.isDestroyed()) {
+                return false;
+            }
+            if(interactionInitiatedBy == InteractionInitiatedBy.FRAMEWORK) { return true; }
+            return isVisibleForUser(adapter);
+        }
+
+        private static boolean isVisibleForUser(final ObjectAdapter adapter) {
+            final VisibilityContext<?> context = createVisibleInteractionContextForUser(adapter);
+            final ObjectSpecification objectSpecification = adapter.getSpecification();
+            final InteractionResult visibleResult = InteractionUtils.isVisibleResult(objectSpecification, context);
+            return visibleResult.isNotVetoing();
+        }
+
+        private static VisibilityContext<?> createVisibleInteractionContextForUser(
+                final ObjectAdapter objectAdapter) {
+            return new ObjectVisibilityContext(
+                    objectAdapter,
+                    objectAdapter.getSpecification().getIdentifier(),
+                    InteractionInitiatedBy.USER,
+                    Where.OBJECT_FORMS);
+        }
     }
+
+    boolean representsPersistent();
+    boolean isDestroyed();
+
 
     public final class InvokeUtils {
 

@@ -22,35 +22,15 @@ package org.apache.isis.core.metamodel.spec.feature;
 import com.google.common.base.Function;
 
 import org.apache.isis.applib.filter.Filter;
-import org.apache.isis.applib.profiles.Localization;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facets.all.named.NamedFacet;
-import org.apache.isis.core.metamodel.interactions.ActionArgumentContext;
+import org.apache.isis.core.metamodel.interactions.ActionArgValidityContext;
 
 /**
  * Analogous to {@link ObjectAssociation}.
  */
 public interface ObjectActionParameter extends ObjectFeature, CurrentHolder {
-
-    /**
-     * If true then can cast to a {@link OneToOneActionParameter}.
-     * 
-     * <p>
-     * Either this or {@link #isCollection()} will be true.
-     * 
-     * <p>
-     * Design note: modelled after {@link ObjectAssociation#isNotCollection()}
-     */
-    boolean isObject();
-
-    /**
-     * Only for symmetry with {@link ObjectAssociation}, however since the NOF
-     * does not support collections as actions all implementations should return
-     * <tt>false</tt>.
-     */
-    boolean isCollection();
 
     /**
      * Owning {@link ObjectAction}.
@@ -87,7 +67,12 @@ public interface ObjectActionParameter extends ObjectFeature, CurrentHolder {
     @Override
     String getName();
 
-    ActionArgumentContext createProposedArgumentInteractionContext(AuthenticationSession session, InteractionInvocationMethod invocationMethod, ObjectAdapter targetObject, ObjectAdapter[] args, int position);
+    // internal API
+    ActionArgValidityContext createProposedArgumentInteractionContext(
+            final ObjectAdapter targetObject,
+            final ObjectAdapter[] args,
+            final int position,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
 
     /**
@@ -100,7 +85,10 @@ public interface ObjectActionParameter extends ObjectFeature, CurrentHolder {
      * Returns a list of possible references/values for this parameter, which the
      * user can choose from, based on the input search argument.
      */
-    ObjectAdapter[] getAutoComplete(ObjectAdapter adapter, String searchArg);
+    ObjectAdapter[] getAutoComplete(
+            final ObjectAdapter adapter,
+            final String searchArg,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     
     
@@ -115,7 +103,10 @@ public interface ObjectActionParameter extends ObjectFeature, CurrentHolder {
      * Returns a list of possible references/values for this parameter, which the
      * user can choose from.
      */
-    ObjectAdapter[] getChoices(ObjectAdapter adapter, final ObjectAdapter[] argumentsIfAvailable);
+    ObjectAdapter[] getChoices(
+            final ObjectAdapter adapter,
+            final ObjectAdapter[] argumentsIfAvailable,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
 
     ObjectAdapter getDefault(ObjectAdapter adapter);
@@ -126,9 +117,13 @@ public interface ObjectActionParameter extends ObjectFeature, CurrentHolder {
      * 
      * @param adapter
      * @param proposedValue
+     * @param interactionInitiatedBy
      * @return
      */
-    String isValid(ObjectAdapter adapter, Object proposedValue, Localization localization);
+    String isValid(
+            final ObjectAdapter adapter,
+            final Object proposedValue,
+            final InteractionInitiatedBy interactionInitiatedBy);
  
 
     

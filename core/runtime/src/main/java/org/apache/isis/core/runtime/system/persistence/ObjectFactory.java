@@ -20,78 +20,42 @@
 package org.apache.isis.core.runtime.system.persistence;
 
 import java.lang.reflect.Modifier;
-import org.apache.isis.core.metamodel.services.ServicesInjectorSpi;
+
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ObjectInstantiationException;
-import org.apache.isis.core.runtime.system.context.IsisContext;
 
 public class ObjectFactory {
 
-    private final Mode mode;
+    private final PersistenceSession persistenceSession;
+    private final ServicesInjector servicesInjector;
 
-    public enum Mode {
-        /**
-         * Fail if no {@link ObjectFactory#getServicesInjector() services injector} has been injected.
-         */
-        STRICT,
-        /**
-         * Ignore if no {@link ObjectFactory#getServicesInjector() services injector} has been injected
-         * (intended for testing only).
-         */
-        RELAXED
-    }
-
-    public ObjectFactory() {
-        this(Mode.STRICT);
-    }
-
-    public ObjectFactory(final Mode mode) {
-        this.mode = mode;
+    public ObjectFactory(
+            final PersistenceSession persistenceSession,
+            final ServicesInjector servicesInjector) {
+        this.persistenceSession = persistenceSession;
+        this.servicesInjector = servicesInjector;
     }
 
     public <T> T instantiate(final Class<T> cls) throws ObjectInstantiationException {
 
-        if (mode == Mode.STRICT && getServicesInjector() == null) {
+        if (servicesInjector == null) {
             throw new IllegalStateException("ServicesInjector is not available (no open session)");
         }
         if (Modifier.isAbstract(cls.getModifiers())) {
             throw new ObjectInstantiationException("Cannot create an instance of an abstract class: " + cls);
         }
-        final T newInstance = doInstantiate(cls);
-
-        if (getServicesInjector() != null) {
-            getServicesInjector().injectServicesInto(newInstance);
-        }
-        return newInstance;
-    }
-
-
-    //region > doInstantiate
-
-    /**
-     * Simply instantiates reflectively.
-     */
-    protected <T> T doInstantiate(final Class<T> cls) throws ObjectInstantiationException {
+        final T newInstance;
         if (Modifier.isAbstract(cls.getModifiers())) {
             throw new ObjectInstantiationException("Cannot create an instance of an abstract class: " + cls);
         }
         try {
-            return cls.newInstance();
+            newInstance = cls.newInstance();
         } catch (final IllegalAccessException | InstantiationException e) {
             throw new ObjectInstantiationException(e);
         }
+
+        servicesInjector.injectServicesInto(newInstance);
+        return newInstance;
     }
-    //endregion
-
-    //region > dependencies (looked up from context)
-
-    private PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
-    }
-
-    protected ServicesInjectorSpi getServicesInjector() {
-        return getPersistenceSession().getServicesInjector();
-    }
-
-    //endregion
 
 }

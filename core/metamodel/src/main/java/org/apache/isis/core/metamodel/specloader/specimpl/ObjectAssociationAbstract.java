@@ -19,24 +19,27 @@
 
 package org.apache.isis.core.metamodel.specloader.specimpl;
 
-import org.apache.isis.core.commons.exceptions.NotYetImplementedException;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facets.FacetedMethod;
 import org.apache.isis.core.metamodel.facets.objectvalue.mandatory.MandatoryFacet;
 import org.apache.isis.core.metamodel.facets.propcoll.notpersisted.NotPersistedFacet;
 import org.apache.isis.core.metamodel.facets.properties.choices.PropertyChoicesFacet;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAssociation;
-import org.apache.isis.core.metamodel.spec.feature.ObjectMemberContext;
 
-// TODO need to pull up the common methods. like getName(), from subclasses
 public abstract class ObjectAssociationAbstract extends ObjectMemberAbstract implements ObjectAssociation {
 
     private final ObjectSpecification specification;
 
-    public ObjectAssociationAbstract(final FacetedMethod facetedMethod, final FeatureType featureType, final ObjectSpecification specification, final ObjectMemberContext parameterObject) {
-        super(facetedMethod, featureType, parameterObject);
+    public ObjectAssociationAbstract(
+            final FacetedMethod facetedMethod,
+            final FeatureType featureType,
+            final ObjectSpecification specification,
+            final ServicesInjector servicesInjector) {
+        super(facetedMethod, featureType, servicesInjector);
         if (specification == null) {
             throw new IllegalArgumentException("field type for '" + getId() + "' must exist");
         }
@@ -44,7 +47,15 @@ public abstract class ObjectAssociationAbstract extends ObjectMemberAbstract imp
     }
 
     @Override
-    public abstract ObjectAdapter get(final ObjectAdapter fromObject);
+    public ObjectAdapter get(
+            final ObjectAdapter fromObject) {
+        return get(fromObject, InteractionInitiatedBy.USER);
+    }
+
+    @Override
+    public abstract ObjectAdapter get(
+            final ObjectAdapter fromObject,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     /**
      * Return the specification of the object (or objects) that this field
@@ -74,16 +85,12 @@ public abstract class ObjectAssociationAbstract extends ObjectMemberAbstract imp
     }
 
     @Override
-    public abstract boolean isEmpty(final ObjectAdapter adapter);
+    public abstract boolean isEmpty(final ObjectAdapter adapter, final InteractionInitiatedBy interactionInitiatedBy);
 
     @Override
     public boolean isOneToOneAssociation() {
         return !isOneToManyAssociation();
     }
 
-    @Override
-    public String getBusinessKeyName() {
-        throw new NotYetImplementedException();
-    }
 
 }

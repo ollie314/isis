@@ -19,13 +19,15 @@
 
 package org.apache.isis.core.metamodel.facets.param.autocomplete;
 
+import org.apache.isis.core.commons.authentication.AuthenticationSession;
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetAbstract;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
-import org.apache.isis.core.metamodel.facets.param.autocomplete.ActionParameterAutoCompleteFacet;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
 public abstract class ActionParameterAutoCompleteFacetAbstract extends FacetAbstract implements ActionParameterAutoCompleteFacet {
 
@@ -33,17 +35,26 @@ public abstract class ActionParameterAutoCompleteFacetAbstract extends FacetAbst
         return ActionParameterAutoCompleteFacet.class;
     }
 
-    private final SpecificationLoader specificationLookup;
+    private final DeploymentCategory deploymentCategory;
+    private final SpecificationLoader specificationLoader;
+    private final AuthenticationSessionProvider authenticationSessionProvider;
     private final AdapterManager adapterManager;
 
-    public ActionParameterAutoCompleteFacetAbstract(final FacetHolder holder, final SpecificationLoader specificationLookup, final AdapterManager adapterManager) {
+    public ActionParameterAutoCompleteFacetAbstract(
+            final FacetHolder holder,
+            final DeploymentCategory deploymentCategory,
+            final SpecificationLoader specificationLoader,
+            final AuthenticationSessionProvider authenticationSessionProvider,
+            final AdapterManager adapterManager) {
         super(type(), holder, Derivation.NOT_DERIVED);
-        this.specificationLookup = specificationLookup;
+        this.deploymentCategory = deploymentCategory;
+        this.specificationLoader = specificationLoader;
+        this.authenticationSessionProvider = authenticationSessionProvider;
         this.adapterManager = adapterManager;
     }
 
     protected ObjectSpecification getSpecification(final Class<?> type) {
-        return type != null ? getSpecificationLookup().loadSpecification(type) : null;
+        return type != null ? getSpecificationLoader().loadSpecification(type) : null;
     }
 
     @Override
@@ -53,12 +64,19 @@ public abstract class ActionParameterAutoCompleteFacetAbstract extends FacetAbst
     // Dependencies
     // /////////////////////////////////////////////////////////
 
-    protected SpecificationLoader getSpecificationLookup() {
-        return specificationLookup;
+    protected SpecificationLoader getSpecificationLoader() {
+        return specificationLoader;
     }
 
     protected AdapterManager getAdapterManager() {
         return adapterManager;
     }
 
+    protected DeploymentCategory getDeploymentCategory() {
+        return deploymentCategory;
+    }
+
+    protected AuthenticationSession getAuthenticationSession() {
+        return authenticationSessionProvider.getAuthenticationSession();
+    }
 }

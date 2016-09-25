@@ -24,7 +24,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
-import org.apache.isis.core.commons.authentication.AuthenticationSessionUtils;
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.commons.lang.MethodExtensions;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
@@ -33,8 +33,11 @@ public class DisableForSessionFacetViaMethod extends DisableForSessionFacetAbstr
 
     private final Method method;
 
-    public DisableForSessionFacetViaMethod(final Method method, final FacetHolder holder) {
-        super(holder);
+    public DisableForSessionFacetViaMethod(
+            final Method method,
+            final FacetHolder holder,
+            final AuthenticationSessionProvider authenticationSessionProvider) {
+        super(holder, authenticationSessionProvider);
         this.method = method;
     }
 
@@ -52,16 +55,6 @@ public class DisableForSessionFacetViaMethod extends DisableForSessionFacetAbstr
         return Intent.CHECK_IF_DISABLED;
     }
 
-    @Override
-    public boolean impliesResolve() {
-        return true;
-    }
-
-    @Override
-    public boolean impliesObjectChanged() {
-        return false;
-    }
-
     /**
      * Will only check provided that a {@link AuthenticationSession} has been
      * provided.
@@ -73,7 +66,7 @@ public class DisableForSessionFacetViaMethod extends DisableForSessionFacetAbstr
         }
         final int len = method.getParameterTypes().length;
         final Object[] parameters = new Object[len];
-        parameters[0] = AuthenticationSessionUtils.createUserMemento(session);
+        parameters[0] = session.createUserMemento();
         // TODO: need to change to pick up as non-static rather than static
         return (String) MethodExtensions.invokeStatic(method, parameters);
     }

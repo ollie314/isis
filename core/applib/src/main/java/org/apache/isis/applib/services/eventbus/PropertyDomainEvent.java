@@ -27,24 +27,69 @@ public abstract class PropertyDomainEvent<S,T> extends AbstractInteractionEvent<
 
     //region > Default class
     /**
-     * Propagated if no custom subclass was specified using
-     * {@link org.apache.isis.applib.annotation.Property#domainEvent()} annotation attribute.
+     * This class is the default for the
+     * {@link org.apache.isis.applib.annotation.Property#domainEvent()} annotation attribute.  Whether this
+     * raises an event or not depends upon the "isis.reflector.facet.propertyAnnotation.domainEvent.postForDefault"
+     * configuration property.
      */
     public static class Default extends PropertyInteractionEvent<Object, Object> {
         private static final long serialVersionUID = 1L;
+        public Default(){}
+        @Deprecated
         public Default(Object source, Identifier identifier, Object oldValue, Object newValue) {
             super(source, identifier, oldValue, newValue);
         }
     }
     //endregion
 
+    //region > Noop class
+
+    /**
+     * Convenience class to use indicating that an event should <i>not</i> be posted (irrespective of the configuration
+     * property setting for the {@link Default} event.
+     */
+    public static class Noop extends PropertyInteractionEvent<Object, Object> {
+        private static final long serialVersionUID = 1L;
+    }
+    //endregion
+
+    //region > Doop class
+
+    /**
+     * Convenience class meaning that an event <i>should</i> be posted (irrespective of the configuration
+     * property setting for the {@link Default} event..
+     */
+    public static class Doop extends PropertyInteractionEvent<Object, Object> {
+        private static final long serialVersionUID = 1L;
+    }
+    //endregion
+
     //region > constructors
+
+    /**
+     * If used then the framework will set state via (non-API) setters.
+     *
+     * <p>
+     *     Recommended because it reduces the amount of boilerplate in the domain object classes.
+     * </p>
+     */
+    public PropertyDomainEvent() {
+    }
+
+    /**
+     * @deprecated - the {@link #PropertyDomainEvent() no-arg constructor} is recommended instead, to reduce boilerplate.
+     */
+    @Deprecated
     public PropertyDomainEvent(
             final S source,
             final Identifier identifier) {
         super(source, identifier);
     }
 
+    /**
+     * @deprecated - the {@link #PropertyDomainEvent() no-arg constructor} is recommended instead, to reduce boilerplate.
+     */
+    @Deprecated
     public PropertyDomainEvent(
             final S source,
             final Identifier identifier,

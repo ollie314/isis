@@ -16,14 +16,15 @@
  *  specific language governing permissions and limitations
  *  under the License.
  */
+
 package org.apache.isis.core.metamodel.adapter.oid;
 
 import org.apache.isis.core.metamodel.spec.ObjectSpecId;
 
-
+/**
+ * @deprecated  - for backward compatibility with addons.
+ */
+@Deprecated
 public interface TypedOid extends Oid {
-    
     ObjectSpecId getObjectSpecId();
-
-
 }

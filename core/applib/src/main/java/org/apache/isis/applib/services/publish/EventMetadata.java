@@ -81,7 +81,7 @@ public class EventMetadata {
             final String actionIdentifier) {
         this(transactionId, sequence, eventType, user, javaSqlTimestamp, title, targetClass, targetAction, target, actionIdentifier, null, null, null );
     }
-    
+
     public EventMetadata(
             final UUID transactionId,
             final int sequence,
@@ -116,17 +116,17 @@ public class EventMetadata {
      * originated.
      * 
      * <p>
-     * Note that there could be several events all with the same transaction Id.
+     * Note that there could be several events all with the same transaction Id, distinguished by {@link #getSequence()}.
      */
     public UUID getTransactionId() {
         return transactionId;
     }
-    
+
     /**
-     * The zero-based sequence number of this event within the transaction.
+     * The zero-based sequence number within the sequence name.
      * 
      * <p>
-     * The combination of {@link #getTransactionId() transaction Id} and {@link #getSequence() sequence}
+     * The combination of [{@link #getTransactionId() transaction Id}, {@link #getSequence() sequence}]
      * is guaranteed to be unique.
      */
     public int getSequence() {
@@ -155,8 +155,7 @@ public class EventMetadata {
     }
     
     /**
-     * Returns a string that concatenates the {@link #getTransactionId()} and the
-     * {@link #getSequence()} with a period (<tt>.</tt>).
+     * Returns a string in form <tt>transactionId.sequence</tt>.
      */
     public String getId() {
         return getTransactionId() + "." + getSequence();

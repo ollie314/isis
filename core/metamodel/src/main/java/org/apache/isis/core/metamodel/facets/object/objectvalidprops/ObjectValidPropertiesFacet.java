@@ -19,6 +19,7 @@
 
 package org.apache.isis.core.metamodel.facets.object.objectvalidprops;
 
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facets.objectvalue.mandatory.MandatoryFacet;
 import org.apache.isis.core.metamodel.interactions.ObjectValidityContext;

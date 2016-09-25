@@ -32,19 +32,13 @@ public final class ServiceUtil {
     public static String id(final Object object) {
         final Class<?> cls = object.getClass();
         try {
-            final Method m = cls.getMethod("getId", new Class[0]);
-            return (String) m.invoke(object, new Object[0]);
-        } catch (final SecurityException e) {
+            final Method m = cls.getMethod("getId");
+            return (String) m.invoke(object);
+        } catch (final SecurityException | IllegalArgumentException | IllegalAccessException | InvocationTargetException e) {
             throw new IsisException(e);
         } catch (final NoSuchMethodException e) {
             final String id = object.getClass().getName();
             return id.substring(id.lastIndexOf('.') + 1);
-        } catch (final IllegalArgumentException e) {
-            throw new IsisException(e);
-        } catch (final IllegalAccessException e) {
-            throw new IsisException(e);
-        } catch (final InvocationTargetException e) {
-            throw new IsisException(e);
         }
     }
 }

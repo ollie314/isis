@@ -30,7 +30,7 @@ import java.util.Comparator;
  * Layout hints for collections.
  */
 @Inherited
-@Target({ ElementType.METHOD })
+@Target({ ElementType.METHOD, ElementType.FIELD })
 @Retention(RetentionPolicy.RUNTIME)
 public @interface CollectionLayout {
 
@@ -48,6 +48,20 @@ public @interface CollectionLayout {
      */
     String describedAs() default "";
 
+    // //////////////////////////////////////
+
+    /**
+     * Indicates which view is used by default to render the collection.
+     *
+     * <p>
+     *     The only view available within the core framework is &quot;table&quot;.  However, other views can be added
+     *     as extensions.  Examples are those provided by the (non-ASF) <a href="isisaddons.org">Isis addons</a>, eg
+     *     &quot;<a href="https://github.com/isisaddons/isis-wicket-excel">excel</a>&quot;,
+     *     &quot;<a href="https://github.com/isisaddons/isis-wicket-fullcalendar2">calendar</a>&quot; and
+     *     &quot;<a href="https://github.com/isisaddons/isis-wicket-gmap3">map</a>&quot;.
+     * </p>
+     */
+    String defaultView() default "";
 
     // //////////////////////////////////////
 
@@ -89,7 +103,7 @@ public @interface CollectionLayout {
      * If annotated on a type, then the page size refers to standalone
      * collections (eg as returned from a repository query).
      */
-    public int paged() default -1;
+    int paged() default -1;
 
 
     // //////////////////////////////////////
@@ -109,8 +123,11 @@ public @interface CollectionLayout {
      * <p>
      * There is some similarity between this concept and that of eager-loading as supported by some object stores.
      * </p>
+     * 
+     * @deprecated - use {@link #defaultView()} set to &quot;table&quot; instead.
      */
-    public RenderType render() default RenderType.LAZILY;
+    @Deprecated
+    RenderType render() default RenderType.LAZILY;
 
 
     // //////////////////////////////////////

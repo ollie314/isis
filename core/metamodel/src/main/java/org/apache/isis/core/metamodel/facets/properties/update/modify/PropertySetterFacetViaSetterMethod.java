@@ -24,8 +24,10 @@ import java.util.Collections;
 import java.util.List;
 
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
+import org.apache.isis.core.metamodel.spec.feature.OneToOneAssociation;
 
 public class PropertySetterFacetViaSetterMethod extends PropertySetterFacetAbstract implements ImperativeFacet {
 
@@ -51,17 +53,11 @@ public class PropertySetterFacetViaSetterMethod extends PropertySetterFacetAbstr
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
-
-    @Override
-    public boolean impliesObjectChanged() {
-        return true;
-    }
-
-    @Override
-    public void setProperty(final ObjectAdapter adapter, final ObjectAdapter valueAdapter) {
+    public void setProperty(
+            final OneToOneAssociation owningAssociation,
+            final ObjectAdapter adapter,
+            final ObjectAdapter valueAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         ObjectAdapter.InvokeUtils.invoke(method, adapter, valueAdapter);
     }
 

@@ -26,19 +26,17 @@ import java.util.List;
 import com.google.common.base.Function;
 
 import org.apache.isis.applib.annotation.ObjectType;
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.consent.InteractionResult;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facets.collections.modify.CollectionFacet;
 import org.apache.isis.core.metamodel.facets.all.describedas.DescribedAsFacet;
 import org.apache.isis.core.metamodel.facets.all.help.HelpFacet;
 import org.apache.isis.core.metamodel.facets.all.hide.HiddenFacet;
 import org.apache.isis.core.metamodel.facets.all.named.NamedFacet;
-import org.apache.isis.core.metamodel.facets.object.parented.ParentedFacet;
+import org.apache.isis.core.metamodel.facets.object.parented.ParentedCollectionFacet;
 import org.apache.isis.core.metamodel.facets.object.encodeable.EncodableFacet;
 import org.apache.isis.core.metamodel.facets.object.icon.IconFacet;
 import org.apache.isis.core.metamodel.facets.object.immutable.ImmutableFacet;
@@ -52,6 +50,7 @@ import org.apache.isis.core.metamodel.interactions.ObjectTitleContext;
 import org.apache.isis.core.metamodel.interactions.ObjectValidityContext;
 import org.apache.isis.core.metamodel.spec.feature.ObjectActionContainer;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAssociationContainer;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.metamodel.specloader.classsubstitutor.ClassSubstitutor;
 
 /**
@@ -64,7 +63,7 @@ import org.apache.isis.core.metamodel.specloader.classsubstitutor.ClassSubstitut
  * first, and then later work out its internals. Hence we create
  * {@link ObjectSpecification}s as we need them, and then introspect them later.
  */
-public interface ObjectSpecification extends Specification, ObjectActionContainer, ObjectAssociationContainer, Hierarchical, Dirtiable, DefaultProvider {
+public interface ObjectSpecification extends Specification, ObjectActionContainer, ObjectAssociationContainer, Hierarchical,  DefaultProvider {
 
     public final static List<ObjectSpecification> EMPTY_LIST = Collections.emptyList();
 
@@ -167,19 +166,19 @@ public interface ObjectSpecification extends Specification, ObjectActionContaine
      * Corresponds to the {@link TitleFacet#value()) value} of
      * {@link TitleFacet}; is not necessarily immutable.
      * 
-     * @deprecated use {@link #getTitle(ObjectAdapter, ObjectAdapter, Localization)}
+     * @deprecated use {@link #getTitle(ObjectAdapter, ObjectAdapter)}
      */
     @Deprecated
-    String getTitle(ObjectAdapter adapter, Localization localization);
+    String getTitle(ObjectAdapter adapter);
 
     /**
      * Returns the title to display of target adapter, rendered within the context
      * of some other adapter (if any).
      * 
      * <p>
-     * @see TitleFacet#title(ObjectAdapter, ObjectAdapter, org.apache.isis.applib.profiles.Localization)
+     * @see TitleFacet#title(ObjectAdapter, ObjectAdapter)
      */
-    String getTitle(ObjectAdapter contextAdapterIfAny, ObjectAdapter targetAdapter, Localization localization);
+    String getTitle(ObjectAdapter contextAdapterIfAny, ObjectAdapter targetAdapter);
 
     /**
      * Returns the name of an icon to use for the specified object.
@@ -218,30 +217,32 @@ public interface ObjectSpecification extends Specification, ObjectActionContaine
      * Create an {@link InteractionContext} representing an attempt to read the
      * object's title.
      */
-    ObjectTitleContext createTitleInteractionContext(AuthenticationSession session, InteractionInvocationMethod invocationMethod, ObjectAdapter targetObjectAdapter);
+    ObjectTitleContext createTitleInteractionContext(AuthenticationSession session, InteractionInitiatedBy invocationMethod, ObjectAdapter targetObjectAdapter);
 
     // //////////////////////////////////////////////////////////////
     // ValidityContext, Validity
     // //////////////////////////////////////////////////////////////
 
-    /**
-     * Create an {@link InteractionContext} representing an attempt to save the
-     * object.
-     * @param deploymentCategory TODO
-     */
-    ObjectValidityContext createValidityInteractionContext(DeploymentCategory deploymentCategory, AuthenticationSession session, InteractionInvocationMethod invocationMethod, ObjectAdapter targetObjectAdapter);
+    // internal API
+    ObjectValidityContext createValidityInteractionContext(
+            final ObjectAdapter targetAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     /**
      * Determines whether the specified object is in a valid state (for example,
      * so can be persisted); represented as a {@link Consent}.
      */
-    Consent isValid(ObjectAdapter adapter);
+    Consent isValid(
+            final ObjectAdapter targetAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     /**
      * Determines whether the specified object is in a valid state (for example,
      * so can be persisted); represented as a {@link InteractionResult}.
      */
-    InteractionResult isValidResult(ObjectAdapter adapter);
+    InteractionResult isValidResult(
+            final ObjectAdapter targetAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     // //////////////////////////////////////////////////////////////
     // Facets
@@ -291,7 +292,7 @@ public interface ObjectSpecification extends Specification, ObjectActionContaine
      * Determines if objects of this type are parented (a parented collection, or an aggregated entity).
      * 
      * <p>
-     * In effect, means has got {@link ParentedFacet}.
+     * In effect, means has got {@link ParentedCollectionFacet}.
      */
     boolean isParented();
 
@@ -330,17 +331,6 @@ public interface ObjectSpecification extends Specification, ObjectActionContaine
      */
     boolean isHidden();
 
-    // //////////////////////////////////////////////////////////////
-    // Creation
-    // //////////////////////////////////////////////////////////////
-
-    Object createObject();
-
-    /**
-     * REVIEW: should this behaviour move, eg onto ObjectAdapter?
-     */
-    ObjectAdapter initialize(ObjectAdapter object);
-
 
 
     // //////////////////////////////////////////////////////////////
@@ -358,7 +348,6 @@ public interface ObjectSpecification extends Specification, ObjectActionContaine
      */
     boolean isService();
 
-    public void markAsService();
 
 
     // //////////////////////////////////////////////////////////////
@@ -366,6 +355,7 @@ public interface ObjectSpecification extends Specification, ObjectActionContaine
     // //////////////////////////////////////////////////////////////
 
     boolean isViewModel();
+    boolean isMixin();
     boolean isViewModelCloneable(ObjectAdapter targetAdapter);
     boolean isWizard();
 }

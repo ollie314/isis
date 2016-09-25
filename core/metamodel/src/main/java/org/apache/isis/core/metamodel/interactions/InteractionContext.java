@@ -28,8 +28,7 @@ import org.apache.isis.applib.events.InteractionEvent;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.InteractionContextType;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 
 /**
@@ -62,26 +61,25 @@ public abstract class InteractionContext<T extends InteractionEvent> {
 
     private final InteractionContextType interactionType;
     private final Identifier identifier;
-    private final InteractionInvocationMethod invocation;
-    private final AuthenticationSession session;
+    private final InteractionInitiatedBy interactionInitiatedBy;
     private final ObjectAdapter target;
-    private final DeploymentCategory deploymentCategory;
-    
+
     private int contributeeParam = -1; // no contributee
     private ObjectAdapter contributee = null;
 
-    public InteractionContext(final InteractionContextType interactionType, DeploymentCategory deploymentCategory, final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final Identifier identifier, final ObjectAdapter target) {
+    private ObjectAdapter mixedInAdapter = null; // for mixin members only, obviously
+
+    public InteractionContext(
+            final InteractionContextType interactionType,
+            final InteractionInitiatedBy invocationMethod,
+            final Identifier identifier,
+            final ObjectAdapter target) {
         this.interactionType = interactionType;
-        this.invocation = invocationMethod;
+        this.interactionInitiatedBy = invocationMethod;
         this.identifier = identifier;
-        this.session = session;
         this.target = target;
-        this.deploymentCategory = deploymentCategory;
     }
 
-    public DeploymentCategory getDeploymentCategory() {
-        return deploymentCategory;
-    }
 
     /**
      * The type of interaction.
@@ -112,27 +110,20 @@ public abstract class InteractionContext<T extends InteractionEvent> {
         return identifier;
     }
 
-    /**
-     * The {@link AuthenticationSession user or role} that is performing this
-     * interaction.
-     */
-    public AuthenticationSession getSession() {
-        return session;
-    }
 
     /**
      * How the interaction was initiated.
      */
-    public InteractionInvocationMethod getInvocationMethod() {
-        return invocation;
+    public InteractionInitiatedBy getInitiatedBy() {
+        return interactionInitiatedBy;
     }
 
     /**
      * Convenience method that indicates whether the
-     * {@link #getInvocationMethod() interaction was invoked} programmatically.
+     * {@link #getInitiatedBy() interaction was invoked} by the framework.
      */
-    public boolean isProgrammatic() {
-        return invocation == InteractionInvocationMethod.PROGRAMMATIC;
+    public boolean isFrameworkInitiated() {
+        return interactionInitiatedBy == InteractionInitiatedBy.FRAMEWORK;
     }
 
     /**
@@ -153,6 +144,16 @@ public abstract class InteractionContext<T extends InteractionEvent> {
         return contributee != null
                 ? ImmutableMap.<Integer, ObjectAdapter>of(contributeeParam, contributee)
                 : ImmutableMap.<Integer, ObjectAdapter>of();
+    }
+
+    // //////////////////////////////////////
+
+    public void setMixedIn(final ObjectAdapter mixedInAdapter) {
+        this.mixedInAdapter = mixedInAdapter;
+    }
+
+    public ObjectAdapter getMixedIn() {
+        return mixedInAdapter;
     }
 
     // //////////////////////////////////////

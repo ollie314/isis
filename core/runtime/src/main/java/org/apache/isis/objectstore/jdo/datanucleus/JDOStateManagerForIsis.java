@@ -21,14 +21,15 @@ package org.apache.isis.objectstore.jdo.datanucleus;
 
 import org.datanucleus.ExecutionContext;
 import org.datanucleus.cache.CachedPC;
-import org.datanucleus.enhancer.Persistable;
+import org.datanucleus.enhancement.Persistable;
 import org.datanucleus.metadata.AbstractClassMetaData;
-import org.datanucleus.state.ObjectProvider;
 import org.datanucleus.state.ReferentialStateManagerImpl;
 import org.datanucleus.store.FieldValues;
 import org.datanucleus.store.fieldmanager.FieldManager;
-import org.apache.isis.core.metamodel.services.ServicesInjectorSpi;
+
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.runtime.system.context.IsisContext;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 
 public class JDOStateManagerForIsis extends ReferentialStateManagerImpl {
 
@@ -214,7 +215,11 @@ public class JDOStateManagerForIsis extends ReferentialStateManagerImpl {
         getServicesInjector().injectServicesInto(pc);
     }
 
-    protected ServicesInjectorSpi getServicesInjector() {
-        return IsisContext.getPersistenceSession().getServicesInjector();
+    protected ServicesInjector getServicesInjector() {
+        return getSessionFactory().getServicesInjector();
+    }
+
+    IsisSessionFactory getSessionFactory() {
+        return IsisContext.getSessionFactory();
     }
 }

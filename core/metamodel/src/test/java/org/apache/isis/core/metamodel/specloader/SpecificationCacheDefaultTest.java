@@ -18,32 +18,34 @@
  */
 package org.apache.isis.core.metamodel.specloader;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThat;
-
 import java.util.Collection;
 import java.util.Map;
 
 import com.google.common.collect.Maps;
 
+import org.apache.isis.core.metamodel.spec.ObjectSpecId;
+import org.apache.isis.core.metamodel.spec.ObjectSpecification;
+import org.jmock.Expectations;
 import org.jmock.auto.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
-import org.apache.isis.core.metamodel.spec.ObjectSpecId;
-import org.apache.isis.core.metamodel.spec.ObjectSpecification;
+import org.apache.isis.core.metamodel.specloader.SpecificationCacheDefault;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2.Mode;
+
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThat;
 
 public class SpecificationCacheDefaultTest {
 
     @Rule
     public JUnitRuleMockery2 context = JUnitRuleMockery2.createFor(Mode.INTERFACES_ONLY);
-    
+
     @Mock
     private ObjectSpecification customerSpec;
     @Mock
@@ -54,6 +56,14 @@ public class SpecificationCacheDefaultTest {
     @Before
     public void setUp() throws Exception {
         specificationCache = new SpecificationCacheDefault();
+
+        context.checking(new Expectations() {{
+            allowing(customerSpec).getCorrespondingClass();
+            will(returnValue(Customer.class));
+
+            allowing(orderSpec).getCorrespondingClass();
+            will(returnValue(Order.class));
+        }});
     }
 
     @After

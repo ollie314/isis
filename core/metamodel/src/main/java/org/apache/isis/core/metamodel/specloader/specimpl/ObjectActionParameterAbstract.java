@@ -25,70 +25,77 @@ import com.google.common.collect.Lists;
 
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.filter.Filter;
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.applib.query.Query;
 import org.apache.isis.applib.query.QueryFindAllInstances;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
-import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.commons.lang.ClassExtensions;
 import org.apache.isis.core.commons.lang.ListExtensions;
 import org.apache.isis.core.commons.lang.StringExtensions;
+import org.apache.isis.core.metamodel.adapter.MutableProposedHolder;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.QuerySubmitter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
 import org.apache.isis.core.metamodel.consent.Allow;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.consent.InteractionResultSet;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.Facet;
+import org.apache.isis.core.metamodel.facetapi.FacetHolder;
+import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facetapi.MultiTypedFacet;
 import org.apache.isis.core.metamodel.facets.TypedHolder;
 import org.apache.isis.core.metamodel.facets.all.describedas.DescribedAsFacet;
-import org.apache.isis.core.metamodel.facets.objectvalue.mandatory.MandatoryFacet;
 import org.apache.isis.core.metamodel.facets.all.named.NamedFacet;
+import org.apache.isis.core.metamodel.facets.object.choices.ChoicesFacetFromBoundedAbstract;
+import org.apache.isis.core.metamodel.facets.objectvalue.mandatory.MandatoryFacet;
 import org.apache.isis.core.metamodel.facets.param.autocomplete.ActionParameterAutoCompleteFacet;
+import org.apache.isis.core.metamodel.facets.param.autocomplete.MinLengthUtil;
 import org.apache.isis.core.metamodel.facets.param.choices.ActionParameterChoicesFacet;
 import org.apache.isis.core.metamodel.facets.param.defaults.ActionParameterDefaultsFacet;
-import org.apache.isis.core.metamodel.interactions.ActionArgumentContext;
+import org.apache.isis.core.metamodel.interactions.ActionArgValidityContext;
 import org.apache.isis.core.metamodel.interactions.InteractionUtils;
 import org.apache.isis.core.metamodel.interactions.ValidityContext;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 import org.apache.isis.core.metamodel.spec.DomainModelException;
+import org.apache.isis.core.metamodel.spec.Instance;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.core.metamodel.spec.feature.ObjectActionParameter;
-import org.apache.isis.core.metamodel.facets.object.choices.ChoicesFacetFromBoundedAbstract;
-import org.apache.isis.core.metamodel.facets.param.autocomplete.MinLengthUtil;
 
 public abstract class ObjectActionParameterAbstract implements ObjectActionParameter {
 
     private final int number;
-    private final ObjectActionImpl parentAction;
+    private final ObjectActionDefault parentAction;
     private final TypedHolder peer;
 
-    protected ObjectActionParameterAbstract(final int number, final ObjectActionImpl objectAction, final TypedHolder peer) {
+    protected ObjectActionParameterAbstract(final int number, final ObjectActionDefault objectAction, final TypedHolder peer) {
         this.number = number;
         this.parentAction = objectAction;
         this.peer = peer;
     }
 
-    /**
-     * Subclasses should override either {@link #isObject()} or
-     * {@link #isCollection()}.
-     */
     @Override
-    public boolean isObject() {
-        return false;
+    public FeatureType getFeatureType() {
+        return FeatureType.ACTION_PARAMETER;
     }
 
+
     /**
-     * Subclasses should override either {@link #isObject()} or
-     * {@link #isCollection()}.
+     * Gets the proposed value of the {@link Instance} (downcast as a
+     * {@link MutableProposedHolder}, wrapping the proposed value into a
+     * {@link ObjectAdapter}.
      */
     @Override
-    public boolean isCollection() {
-        return false;
+    public ObjectAdapter get(final ObjectAdapter owner, final InteractionInitiatedBy interactionInitiatedBy) {
+        final MutableProposedHolder proposedHolder = getProposedHolder(owner);
+        final Object proposed = proposedHolder.getProposed();
+        return getAdapterMap().adapterFor(proposed);
+    }
+
+    protected MutableProposedHolder getProposedHolder(final ObjectAdapter owner) {
+        if (!(owner instanceof MutableProposedHolder)) {
+            throw new IllegalArgumentException("Instance should implement MutableProposedHolder");
+        }
+        return (MutableProposedHolder) owner;
     }
 
     /**
@@ -105,15 +112,16 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
     }
 
     /**
-     * NOT API, but exposed for the benefit of {@link ObjectActionParameterContributee}.
+     * NOT API, but exposed for the benefit of {@link ObjectActionParameterContributee}
+     * and {@link ObjectActionParameterMixedIn}.
      */
-    public TypedHolder getPeer() {
+    TypedHolder getPeer() {
         return peer;
     }
 
     @Override
     public ObjectSpecification getSpecification() {
-        return ObjectMemberAbstract.getSpecification(getSpecificationLookup(), peer.getType());
+        return ObjectMemberAbstract.getSpecification(getSpecificationLoader(), peer.getType());
     }
 
     @Override
@@ -188,68 +196,78 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
         return Allow.DEFAULT;
     }
 
-    // //////////////////////////////////////////////////////////
-    // FacetHolder
-    // //////////////////////////////////////////////////////////
+    //region > FacetHolder
+
+    protected FacetHolder getFacetHolder() {
+        return peer;
+    }
 
     @Override
     public boolean containsFacet(final Class<? extends Facet> facetType) {
-        return peer != null ? peer.containsFacet(facetType) : false;
+        final FacetHolder facetHolder = getFacetHolder();
+        return facetHolder != null && facetHolder.containsFacet(facetType);
     }
 
     @Override
     public boolean containsDoOpFacet(final Class<? extends Facet> facetType) {
-        return peer == null ? false : peer.containsDoOpFacet(facetType);
+        final FacetHolder facetHolder = getFacetHolder();
+        return facetHolder != null && facetHolder.containsDoOpFacet(facetType);
     }
 
     @Override
     public <T extends Facet> T getFacet(final Class<T> cls) {
-        return peer != null ? peer.getFacet(cls) : null;
+        final FacetHolder facetHolder = getFacetHolder();
+        return facetHolder != null ? facetHolder.getFacet(cls) : null;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public Class<? extends Facet>[] getFacetTypes() {
-        return peer != null ? peer.getFacetTypes() : new Class[] {};
+        final FacetHolder facetHolder = getFacetHolder();
+        return facetHolder != null ? facetHolder.getFacetTypes() : new Class[] {};
     }
 
     @Override
     public List<Facet> getFacets(final Filter<Facet> filter) {
-        return peer != null ? peer.getFacets(filter) : Lists.<Facet> newArrayList();
+        final FacetHolder facetHolder = getFacetHolder();
+        return facetHolder != null ? facetHolder.getFacets(filter) : Lists.<Facet> newArrayList();
     }
 
     @Override
     public void addFacet(final Facet facet) {
-        if (peer != null) {
-            peer.addFacet(facet);
+        final FacetHolder facetHolder = getFacetHolder();
+        if (facetHolder != null) {
+            facetHolder.addFacet(facet);
         }
     }
 
     @Override
     public void addFacet(final MultiTypedFacet facet) {
-        if (peer != null) {
-            peer.addFacet(facet);
+        final FacetHolder facetHolder = getFacetHolder();
+        if (facetHolder != null) {
+            facetHolder.addFacet(facet);
         }
     }
 
     @Override
     public void removeFacet(final Facet facet) {
-        if (peer != null) {
-            peer.removeFacet(facet);
+        final FacetHolder facetHolder = getFacetHolder();
+        if (facetHolder != null) {
+            facetHolder.removeFacet(facet);
         }
     }
 
     @Override
     public void removeFacet(final Class<? extends Facet> facetType) {
-        if (peer != null) {
-            peer.removeFacet(facetType);
+        final FacetHolder facetHolder = getFacetHolder();
+        if (facetHolder != null) {
+            facetHolder.removeFacet(facetType);
         }
     }
 
+    //endregion
 
-    // /////////////////////////////////////////////////////////////
-    // AutoComplete
-    // /////////////////////////////////////////////////////////////
+    //region > AutoComplete
 
     @Override
     public boolean hasAutoComplete() {
@@ -258,13 +276,19 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
     }
 
     @Override
-    public ObjectAdapter[] getAutoComplete(ObjectAdapter adapter, String searchArg) {
+    public ObjectAdapter[] getAutoComplete(
+            final ObjectAdapter adapter,
+            final String searchArg,
+            final InteractionInitiatedBy interactionInitiatedBy) {
+
         final List<ObjectAdapter> adapters = Lists.newArrayList();
         final ActionParameterAutoCompleteFacet facet = getFacet(ActionParameterAutoCompleteFacet.class);
 
         if (facet != null) {
-            final Object[] choices = facet.autoComplete(adapter, searchArg);
-            checkChoicesOrAutoCompleteType(getSpecificationLookup(), choices, getSpecification());
+
+            final Object[] choices = facet.autoComplete(adapter, searchArg,
+                    interactionInitiatedBy);
+            checkChoicesOrAutoCompleteType(getSpecificationLoader(), choices, getSpecification());
             for (final Object choice : choices) {
                 adapters.add(getAdapterMap().adapterFor(choice));
             }
@@ -283,10 +307,9 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
         return facet != null? facet.getMinLength(): MinLengthUtil.MIN_LENGTH_DEFAULT;
     }
 
+    //endregion
 
-    // /////////////////////////////////////////////////////////////
-    // Choices
-    // /////////////////////////////////////////////////////////////
+    //region > Choices
 
     @Override
     public boolean hasChoices() {
@@ -295,22 +318,29 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
     }
 
     @Override
-    public ObjectAdapter[] getChoices(final ObjectAdapter adapter, final ObjectAdapter[] argumentsIfAvailable) {
+    public ObjectAdapter[] getChoices(
+            final ObjectAdapter adapter,
+            final ObjectAdapter[] argumentsIfAvailable,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         final List<ObjectAdapter> argListIfAvailable = ListExtensions.mutableCopy(argumentsIfAvailable);
         
-        final ObjectAdapter target = targetForDefaultOrChoices(adapter, argListIfAvailable);
+        final ObjectAdapter target = targetForDefaultOrChoices(adapter);
         final List<ObjectAdapter> args = argsForDefaultOrChoices(adapter, argListIfAvailable);
         
-        return findChoices(target, args);
+        return findChoices(target, args, interactionInitiatedBy);
     }
 
-    private ObjectAdapter[] findChoices(final ObjectAdapter target, final List<ObjectAdapter> args) {
+    private ObjectAdapter[] findChoices(
+            final ObjectAdapter target,
+            final List<ObjectAdapter> args,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         final List<ObjectAdapter> adapters = Lists.newArrayList();
         final ActionParameterChoicesFacet facet = getFacet(ActionParameterChoicesFacet.class);
 
         if (facet != null) {
-            final Object[] choices = facet.getChoices(target, args);
-            checkChoicesOrAutoCompleteType(getSpecificationLookup(), choices, getSpecification());
+            final Object[] choices = facet.getChoices(target, args,
+                    interactionInitiatedBy);
+            checkChoicesOrAutoCompleteType(getSpecificationLoader(), choices, getSpecification());
             for (final Object choice : choices) {
                 ObjectAdapter adapter = choice != null? getAdapterMap().adapterFor(choice) : null;
                 adapters.add(adapter);
@@ -322,17 +352,17 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
             addAllInstancesForType(adapters);
         }
         */
-        return adapters.toArray(new ObjectAdapter[0]);
+        return adapters.toArray(new ObjectAdapter[adapters.size()]);
     }
-    
-    // /////////////////////////////////////////////////////////////
-    // Defaults
-    // /////////////////////////////////////////////////////////////
+
+    //endregion
+
+    //region > Defaults
 
     @Override
     public ObjectAdapter getDefault(final ObjectAdapter adapter) {
         
-        final ObjectAdapter target = targetForDefaultOrChoices(adapter, null);
+        final ObjectAdapter target = targetForDefaultOrChoices(adapter);
         final List<ObjectAdapter> args = argsForDefaultOrChoices(adapter, null);
         
         return findDefault(target, args);
@@ -357,21 +387,25 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
     /**
      * Hook method; {@link ObjectActionParameterContributee contributed action parameter}s override.
      */
-    protected ObjectAdapter targetForDefaultOrChoices(ObjectAdapter adapter, final List<ObjectAdapter> argumentsIfAvailable) {
+    protected ObjectAdapter targetForDefaultOrChoices(final ObjectAdapter adapter) {
         return adapter;
     }
 
     /**
      * Hook method; {@link ObjectActionParameterContributee contributed action parameter}s override.
      */
-    protected List<ObjectAdapter> argsForDefaultOrChoices(final ObjectAdapter adapter, final List<ObjectAdapter> argumentsIfAvailable) {
+    protected List<ObjectAdapter> argsForDefaultOrChoices(
+            final ObjectAdapter adapter,
+            final List<ObjectAdapter> argumentsIfAvailable) {
         return argumentsIfAvailable;
     }
 
     
     // helpers
-
-    static void checkChoicesOrAutoCompleteType(final SpecificationLoader specificationLookup, final Object[] objects, final ObjectSpecification paramSpec) {
+    static void checkChoicesOrAutoCompleteType(
+            final SpecificationLoader specificationLookup,
+            final Object[] objects,
+            final ObjectSpecification paramSpec) {
         for (final Object object : objects) {
 
             if(object == null) {
@@ -401,35 +435,36 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
     @SuppressWarnings("unused")
     private <T> void addAllInstancesForType(final List<ObjectAdapter> adapters) {
         final Query<T> query = new QueryFindAllInstances<T>(getSpecification().getFullIdentifier());
-        final List<ObjectAdapter> allInstancesAdapter = getQuerySubmitter().allMatchingQuery(query);
+        final List<ObjectAdapter> allInstancesAdapter = getObjectPersistor().allMatchingQuery(query);
         for (final ObjectAdapter choiceAdapter : allInstancesAdapter) {
             adapters.add(choiceAdapter);
         }
     }
 
-    
-    // /////////////////////////////////////////////////////////////
-    // Validation
-    // /////////////////////////////////////////////////////////////
+    //endregion
+
+    //region > Validation
 
     @Override
-    public ActionArgumentContext createProposedArgumentInteractionContext(final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter targetObject, final ObjectAdapter[] proposedArguments, final int position) {
-        return new ActionArgumentContext(getDeploymentCategory(), getAuthenticationSession(), invocationMethod, targetObject, getIdentifier(), proposedArguments, position);
+    public ActionArgValidityContext createProposedArgumentInteractionContext(
+            final ObjectAdapter objectAdapter,
+            final ObjectAdapter[] proposedArguments,
+            final int position,
+            final InteractionInitiatedBy interactionInitiatedBy) {
+        return new ActionArgValidityContext(
+                objectAdapter, parentAction, getIdentifier(), proposedArguments, position, interactionInitiatedBy);
     }
 
     @Override
-    public String isValid(final ObjectAdapter adapter, final Object proposedValue, final Localization localization) {
-        
+    public String isValid(
+            final ObjectAdapter objectAdapter,
+            final Object proposedValue,
+            final InteractionInitiatedBy interactionInitiatedBy) {
+
         ObjectAdapter proposedValueAdapter = null;
         ObjectSpecification proposedValueSpec;
         if(proposedValue != null) {
             proposedValueAdapter = getAdapterMap().adapterFor(proposedValue);
-            proposedValueSpec = proposedValueAdapter.getSpecification();
-            if(!proposedValueSpec.isOfType(proposedValueSpec)) {
-                proposedValueAdapter = doCoerceProposedValue(adapter, proposedValue, localization);
-            }
-            
-            // check has been coerced into correct type; otherwise give up
             if(proposedValueAdapter == null) {
                 return null;
             }
@@ -438,9 +473,11 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
                 return null;
             }
         }
-        
 
-        final ValidityContext<?> ic = createProposedArgumentInteractionContext(getAuthenticationSession(), InteractionInvocationMethod.BY_USER, adapter, arguments(proposedValueAdapter), getNumber());
+        final ObjectAdapter[] argumentAdapters = arguments(proposedValueAdapter);
+        final ValidityContext<?> ic = createProposedArgumentInteractionContext(
+                objectAdapter, argumentAdapters, getNumber(), interactionInitiatedBy
+        );
 
         final InteractionResultSet buf = new InteractionResultSet();
         InteractionUtils.isValidResultSet(this, ic, buf);
@@ -449,13 +486,6 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
         }
         return null;
 
-    }
-
-    /**
-     * Optional hook for parsing.
-     */
-    protected ObjectAdapter doCoerceProposedValue(ObjectAdapter adapter, Object proposedValue, final Localization localization) {
-        return null;
     }
 
     /**
@@ -471,32 +501,22 @@ public abstract class ObjectActionParameterAbstract implements ObjectActionParam
         return arguments;
     }
 
-    // /////////////////////////////////////////////////////////////
-    // Dependencies (from parent)
-    // /////////////////////////////////////////////////////////////
+    //endregion
 
-    private DeploymentCategory getDeploymentCategory() {
-        return parentAction.getDeploymentCategory();
-    }
+    //region > Dependencies (from parent)
 
-    protected SpecificationLoader getSpecificationLookup() {
-        return parentAction.getSpecificationLookup();
-    }
-
-    protected AuthenticationSessionProvider getAuthenticationSessionProvider() {
-        return parentAction.getAuthenticationSessionProvider();
+    protected SpecificationLoader getSpecificationLoader() {
+        return parentAction.getSpecificationLoader();
     }
 
     protected AdapterManager getAdapterMap() {
-        return parentAction.getAdapterManager();
+        return parentAction.getPersistenceSessionService();
     }
 
-    protected QuerySubmitter getQuerySubmitter() {
-        return parentAction.getQuerySubmitter();
+    protected PersistenceSessionServiceInternal getObjectPersistor() {
+        return parentAction.getPersistenceSessionService();
     }
 
-    protected AuthenticationSession getAuthenticationSession() {
-        return getAuthenticationSessionProvider().getAuthenticationSession();
-    }
+    //endregion
 
 }

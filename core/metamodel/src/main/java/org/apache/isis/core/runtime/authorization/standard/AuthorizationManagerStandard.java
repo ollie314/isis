@@ -22,14 +22,13 @@ package org.apache.isis.core.runtime.authorization.standard;
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.debug.DebugBuilder;
-import org.apache.isis.core.commons.debug.DebuggableWithTitle;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.progmodel.ProgrammingModel;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
 import org.apache.isis.core.runtime.authorization.AuthorizationManagerAbstract;
 
-public class AuthorizationManagerStandard extends AuthorizationManagerAbstract implements DebuggableWithTitle {
+public class AuthorizationManagerStandard extends AuthorizationManagerAbstract {
 
     private Authorizor authorizor;
 
@@ -43,7 +42,7 @@ public class AuthorizationManagerStandard extends AuthorizationManagerAbstract i
         authorizor = new Authorizor() {
 
             @Override
-            public void init() {
+            public void init(final DeploymentCategory deploymentCategory) {
             }
 
             @Override
@@ -76,12 +75,10 @@ public class AuthorizationManagerStandard extends AuthorizationManagerAbstract i
     // init, shutddown
     // /////////////////////////////////////////////////////////
 
-    @Override
-    public void init() {
-        authorizor.init();
+    public void init(final DeploymentCategory deploymentCategory) {
+        authorizor.init(deploymentCategory);
     }
 
-    @Override
     public void shutdown() {
         authorizor.shutdown();
     }
@@ -148,20 +145,6 @@ public class AuthorizationManagerStandard extends AuthorizationManagerAbstract i
         baseProgrammingModel.addFactory(facetFactory);
     }
 
-    // //////////////////////////////////////////////////////////
-    // Debugging
-    // //////////////////////////////////////////////////////////
-
-    @Override
-    public String debugTitle() {
-        return "Authorization Manager";
-    }
-
-    @Override
-    public void debugData(final DebugBuilder debug) {
-        debug.appendTitle("Authorizor Manager");
-        debug.appendln("Authorizer", authorizor);
-    }
 
     // //////////////////////////////////////////////////
     // Dependencies (injected)

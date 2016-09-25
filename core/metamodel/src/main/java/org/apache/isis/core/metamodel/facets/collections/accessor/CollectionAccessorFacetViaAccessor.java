@@ -23,18 +23,37 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.isis.applib.DomainObjectContainer;
+import com.google.common.collect.Lists;
+
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
+import org.apache.isis.core.commons.config.IsisConfiguration;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
+import org.apache.isis.core.metamodel.facets.CollectionUtils;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
 import org.apache.isis.core.metamodel.facets.propcoll.accessor.PropertyOrCollectionAccessorFacetAbstract;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
-public class CollectionAccessorFacetViaAccessor extends PropertyOrCollectionAccessorFacetAbstract implements ImperativeFacet {
+public class CollectionAccessorFacetViaAccessor
+        extends PropertyOrCollectionAccessorFacetAbstract
+        implements ImperativeFacet {
 
     private final Method method;
 
-    public CollectionAccessorFacetViaAccessor(final Method method, final FacetHolder holder) {
-        super(holder);
+    public CollectionAccessorFacetViaAccessor(
+            final Method method,
+            final FacetHolder holder,
+            final DeploymentCategory deploymentCategory,
+            final IsisConfiguration isisConfiguration,
+            final SpecificationLoader specificationLoader,
+            final AuthenticationSessionProvider authenticationSessionProvider,
+            final AdapterManager adapterManager) {
+        super(holder, deploymentCategory, isisConfiguration, specificationLoader, authenticationSessionProvider,
+                adapterManager
+        );
         this.method = method;
     }
 
@@ -53,29 +72,38 @@ public class CollectionAccessorFacetViaAccessor extends PropertyOrCollectionAcce
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
+    public Object getProperty(
+            final ObjectAdapter owningAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy) {
+        final Object collectionOrArray = ObjectAdapter.InvokeUtils.invoke(method, owningAdapter);
 
-    /**
-     * Bytecode cannot automatically call
-     * {@link DomainObjectContainer#objectChanged(Object)} because cannot
-     * distinguish whether interacting with accessor to read it or to modify its
-     * contents.
-     */
-    @Override
-    public boolean impliesObjectChanged() {
-        return false;
-    }
+        final ObjectAdapter collectionAdapter = getAdapterManager().adapterFor(collectionOrArray);
 
-    @Override
-    public Object getProperty(final ObjectAdapter owningAdapter) {
-        return ObjectAdapter.InvokeUtils.invoke(method, owningAdapter);
+        boolean filterForVisibility = getConfiguration().getBoolean("isis.reflector.facet.filterVisibility", true);
+        if(filterForVisibility) {
+            final List<ObjectAdapter> visibleAdapters =
+                    ObjectAdapter.Util.visibleAdapters(
+                            collectionAdapter,
+                            interactionInitiatedBy);
+            final Object visibleObjects =
+                    CollectionUtils.copyOf(
+                            Lists.transform(visibleAdapters, ObjectAdapter.Functions.getObject()),
+                            method.getReturnType());
+            if (visibleObjects != null) {
+                return visibleObjects;
+            }
+            // would be null if unable to take a copy (unrecognized return type)
+            // fallback to returning the original adapter, without filtering for visibility
+        }
+
+        // either no filtering, or was unable to filter (unable to take copy due to unrecognized type)
+        return collectionOrArray;
     }
 
     @Override
     protected String toStringValues() {
         return "method=" + method;
     }
+
 
 }

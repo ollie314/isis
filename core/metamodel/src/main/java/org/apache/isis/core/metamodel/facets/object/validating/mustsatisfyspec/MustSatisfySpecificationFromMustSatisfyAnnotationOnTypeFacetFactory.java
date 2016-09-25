@@ -21,10 +21,10 @@ package org.apache.isis.core.metamodel.facets.object.validating.mustsatisfyspec;
 
 import java.util.ArrayList;
 import java.util.List;
+
 import org.apache.isis.applib.annotation.MustSatisfy;
 import org.apache.isis.applib.spec.Specification;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
@@ -32,6 +32,8 @@ import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facetapi.MetaModelValidatorRefiner;
 import org.apache.isis.core.metamodel.facets.Annotations;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
+import org.apache.isis.core.metamodel.progmodel.DeprecatedMarker;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorForDeprecatedAnnotation;
 
@@ -39,7 +41,8 @@ import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorFor
  * @deprecated
  */
 @Deprecated
-public class MustSatisfySpecificationFromMustSatisfyAnnotationOnTypeFacetFactory extends FacetFactoryAbstract implements MetaModelValidatorRefiner, IsisConfigurationAware {
+public class MustSatisfySpecificationFromMustSatisfyAnnotationOnTypeFacetFactory extends FacetFactoryAbstract
+        implements MetaModelValidatorRefiner, DeprecatedMarker {
 
     private final MetaModelValidatorForDeprecatedAnnotation validator = new MetaModelValidatorForDeprecatedAnnotation(MustSatisfy.class);
 
@@ -49,15 +52,18 @@ public class MustSatisfySpecificationFromMustSatisfyAnnotationOnTypeFacetFactory
 
     @Override
     public void process(final ProcessClassContext processClassContaxt) {
-        final Facet facet = create(processClassContaxt.getCls(), processClassContaxt.getFacetHolder());
+        final Facet facet = create(processClassContaxt.getCls(), processClassContaxt.getFacetHolder(), servicesInjector);
         FacetUtil.addFacet(validator.flagIfPresent(facet));
     }
 
-    private Facet create(final Class<?> clazz, final FacetHolder holder) {
-        return create(Annotations.getAnnotation(clazz, MustSatisfy.class), holder);
+    private Facet create(final Class<?> clazz, final FacetHolder holder, final ServicesInjector servicesInjector) {
+        return create(Annotations.getAnnotation(clazz, MustSatisfy.class), holder, servicesInjector);
     }
 
-    private static Facet create(final MustSatisfy annotation, final FacetHolder holder) {
+    private static Facet create(
+            final MustSatisfy annotation,
+            final FacetHolder holder,
+            final ServicesInjector servicesInjector) {
         if (annotation == null) {
             return null;
         }
@@ -69,7 +75,7 @@ public class MustSatisfySpecificationFromMustSatisfyAnnotationOnTypeFacetFactory
                 specifications.add(specification);
             }
         }
-        return specifications.size() > 0 ? new MustSatisfySpecificationFromMustSatisfyAnnotationOnTypeFacet(specifications, holder) : null;
+        return specifications.size() > 0 ? new MustSatisfySpecificationFromMustSatisfyAnnotationOnTypeFacet(specifications, holder, servicesInjector) : null;
     }
 
     private static Specification newSpecificationElseNull(final Class<?> value) {
@@ -91,8 +97,12 @@ public class MustSatisfySpecificationFromMustSatisfyAnnotationOnTypeFacetFactory
     }
 
     @Override
-    public void setConfiguration(final IsisConfiguration configuration) {
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        IsisConfiguration configuration = servicesInjector.getConfigurationServiceInternal();
         validator.setConfiguration(configuration);
     }
+
+
 
 }

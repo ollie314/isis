@@ -24,35 +24,31 @@ import org.apache.isis.applib.adapters.DefaultsProvider;
 import org.apache.isis.applib.adapters.EncoderDecoder;
 import org.apache.isis.applib.adapters.Parser;
 import org.apache.isis.applib.annotation.Value;
-import org.apache.isis.applib.profiles.Localization;
-import org.apache.isis.core.commons.config.IsisConfigurationDefault;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryTest;
 import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessClassContext;
+import org.apache.isis.core.metamodel.facets.object.defaults.DefaultedFacet;
 import org.apache.isis.core.metamodel.facets.object.encodeable.EncodableFacet;
 import org.apache.isis.core.metamodel.facets.object.immutable.ImmutableFacet;
 import org.apache.isis.core.metamodel.facets.object.parseable.ParseableFacet;
 import org.apache.isis.core.metamodel.facets.object.title.TitleFacet;
+import org.apache.isis.core.metamodel.facets.object.value.annotcfg.ValueFacetAnnotation;
 import org.apache.isis.core.metamodel.facets.object.value.annotcfg.ValueFacetAnnotationOrConfigurationFactory;
 import org.apache.isis.core.metamodel.facets.object.value.vsp.ValueSemanticsProviderUtil;
 import org.apache.isis.core.metamodel.facets.objectvalue.typicallen.TypicalLengthFacet;
-import org.apache.isis.core.metamodel.runtimecontext.noruntime.RuntimeContextNoRuntime;
-import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryTest;
-import org.apache.isis.core.metamodel.facets.object.defaults.DefaultedFacet;
-import org.apache.isis.core.metamodel.facets.object.value.annotcfg.ValueFacetAnnotation;
+import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 
 public class ValueFacetAnnotationOrConfigurationFactoryTest extends AbstractFacetFactoryTest {
 
+    private JUnitRuleMockery2 context = JUnitRuleMockery2.createFor(JUnitRuleMockery2.Mode.INTERFACES_AND_CLASSES);
+
     private ValueFacetAnnotationOrConfigurationFactory facetFactory;
-    private IsisConfigurationDefault isisConfigurationDefault;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
 
         facetFactory = new ValueFacetAnnotationOrConfigurationFactory();
-        isisConfigurationDefault = new IsisConfigurationDefault();
-        facetFactory.setConfiguration(isisConfigurationDefault);
-        facetFactory.setRuntimeContext(new RuntimeContextNoRuntime(DeploymentCategory.PRODUCTION));
+        facetFactory.setServicesInjector(stubServicesInjector);
     }
 
     @Override
@@ -192,12 +188,14 @@ public class ValueFacetAnnotationOrConfigurationFactoryTest extends AbstractFace
         }
 
         @Override
-        public MyValueSemanticsProviderThatIsAParser parseTextEntry(final Object context, final String entry, Localization localization) {
+        public MyValueSemanticsProviderThatIsAParser parseTextEntry(
+                final Object context,
+                final String entry) {
             return null;
         }
 
         @Override
-        public String displayTitleOf(final MyValueSemanticsProviderThatIsAParser object, final Localization localization) {
+        public String displayTitleOf(final MyValueSemanticsProviderThatIsAParser object) {
             return null;
         }
 
@@ -401,12 +399,14 @@ public class ValueFacetAnnotationOrConfigurationFactoryTest extends AbstractFace
         }
 
         @Override
-        public MyValueWithSemanticsProviderSpecifiedUsingConfiguration parseTextEntry(final Object context, final String entry, Localization localization) {
+        public MyValueWithSemanticsProviderSpecifiedUsingConfiguration parseTextEntry(
+                final Object context,
+                final String entry) {
             return null;
         }
 
         @Override
-        public String displayTitleOf(final MyValueWithSemanticsProviderSpecifiedUsingConfiguration object, final Localization localization) {
+        public String displayTitleOf(final MyValueWithSemanticsProviderSpecifiedUsingConfiguration object) {
             return null;
         }
 
@@ -427,9 +427,16 @@ public class ValueFacetAnnotationOrConfigurationFactoryTest extends AbstractFace
     }
 
     public void testSemanticsProviderNameCanBePickedUpFromConfiguration() {
+
+        // given
         final String className = "org.apache.isis.core.metamodel.facets.object.value.ValueFacetAnnotationOrConfigurationFactoryTest$MyValueWithSemanticsProviderSpecifiedUsingConfiguration";
-        isisConfigurationDefault.add(ValueSemanticsProviderUtil.SEMANTICS_PROVIDER_NAME_KEY_PREFIX + canonical(className) + ValueSemanticsProviderUtil.SEMANTICS_PROVIDER_NAME_KEY_SUFFIX, className);
+
+        stubConfiguration.add(ValueSemanticsProviderUtil.SEMANTICS_PROVIDER_NAME_KEY_PREFIX + canonical(className) + ValueSemanticsProviderUtil.SEMANTICS_PROVIDER_NAME_KEY_SUFFIX, className);
+
+        // when
         facetFactory.process(new ProcessClassContext(MyValueWithSemanticsProviderSpecifiedUsingConfiguration.class, methodRemover, facetedMethod));
+
+        // then
         final ValueFacetAbstract facet = (ValueFacetAbstract) facetedMethod.getFacet(ValueFacet.class);
         assertNotNull(facet);
         // should also be a ParserFacet, since the VSP implements Parser
@@ -445,12 +452,14 @@ public class ValueFacetAnnotationOrConfigurationFactoryTest extends AbstractFace
         }
 
         @Override
-        public NonAnnotatedValueSemanticsProviderSpecifiedUsingConfiguration parseTextEntry(final Object context, final String entry, Localization localization) {
+        public NonAnnotatedValueSemanticsProviderSpecifiedUsingConfiguration parseTextEntry(
+                final Object context,
+                final String entry) {
             return null;
         }
 
         @Override
-        public String displayTitleOf(final NonAnnotatedValueSemanticsProviderSpecifiedUsingConfiguration object, final Localization localization) {
+        public String displayTitleOf(final NonAnnotatedValueSemanticsProviderSpecifiedUsingConfiguration object) {
             return null;
         }
 
@@ -471,9 +480,18 @@ public class ValueFacetAnnotationOrConfigurationFactoryTest extends AbstractFace
     }
 
     public void testNonAnnotatedValueCanPickUpSemanticsProviderFromConfiguration() {
+
+        // given
         final String className = "org.apache.isis.core.metamodel.facets.object.value.ValueFacetAnnotationOrConfigurationFactoryTest$NonAnnotatedValueSemanticsProviderSpecifiedUsingConfiguration";
-        isisConfigurationDefault.add(ValueSemanticsProviderUtil.SEMANTICS_PROVIDER_NAME_KEY_PREFIX + canonical(className) + ValueSemanticsProviderUtil.SEMANTICS_PROVIDER_NAME_KEY_SUFFIX, className);
+
+        stubConfiguration.add(ValueSemanticsProviderUtil.SEMANTICS_PROVIDER_NAME_KEY_PREFIX + canonical(className) + ValueSemanticsProviderUtil.SEMANTICS_PROVIDER_NAME_KEY_SUFFIX, className);
+
+
+        // when
         facetFactory.process(new ProcessClassContext(NonAnnotatedValueSemanticsProviderSpecifiedUsingConfiguration.class, methodRemover, facetedMethod));
+
+
+        // then
         final ValueFacetAbstract facet = (ValueFacetAbstract) facetedMethod.getFacet(ValueFacet.class);
         assertNotNull(facet);
         // should also be a ParserFacet, since the VSP implements Parser

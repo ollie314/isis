@@ -18,10 +18,13 @@
  */
 package org.apache.isis.viewer.restfulobjects.server;
 
+import org.apache.isis.viewer.restfulobjects.rendering.service.acceptheader.AcceptHeaderServiceForRest;
+import org.apache.isis.viewer.restfulobjects.server.conneg.RestfulObjectsJaxbWriterForXml;
 import org.apache.isis.viewer.restfulobjects.server.resources.DomainObjectResourceServerside;
 import org.apache.isis.viewer.restfulobjects.server.resources.DomainServiceResourceServerside;
 import org.apache.isis.viewer.restfulobjects.server.resources.DomainTypeResourceServerside;
 import org.apache.isis.viewer.restfulobjects.server.resources.HomePageResourceServerside;
+import org.apache.isis.viewer.restfulobjects.server.resources.SwaggerSpecResource;
 import org.apache.isis.viewer.restfulobjects.server.resources.UserResourceServerside;
 import org.apache.isis.viewer.restfulobjects.server.resources.VersionResourceServerside;
 
@@ -37,9 +40,16 @@ public class RestfulObjectsApplication extends AbstractJaxRsApplication {
         addClass(DomainServiceResourceServerside.class);
         addClass(VersionResourceServerside.class);
 
+        addClass(SwaggerSpecResource.class);
+
+        final RestfulObjectsJaxbWriterForXml roWriter = new RestfulObjectsJaxbWriterForXml();
+        addSingleton(roWriter);
         addSingleton(new RestfulObjectsApplicationExceptionMapper());
         addSingleton(new RuntimeExceptionMapper());
-        
+
+        addSingleton(new AcceptHeaderServiceForRest.RequestFilter());
+        addSingleton(new AcceptHeaderServiceForRest.ResponseFilter());
+
         // TODO: doesn't get injected
         // addSingleton(new TypedReprBuilderFactoryRegistry());
 

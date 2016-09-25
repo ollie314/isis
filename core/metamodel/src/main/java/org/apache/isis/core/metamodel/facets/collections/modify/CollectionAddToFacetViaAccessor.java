@@ -24,21 +24,18 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.isis.applib.DomainObjectContainer;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.ObjectDirtier;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
 
 public class CollectionAddToFacetViaAccessor extends CollectionAddToFacetAbstract implements ImperativeFacet {
 
     private final Method method;
-    private final ObjectDirtier objectDirtier;
 
-    public CollectionAddToFacetViaAccessor(final Method method, final FacetHolder holder, final ObjectDirtier objectDirtier) {
+    public CollectionAddToFacetViaAccessor(final Method method, final FacetHolder holder) {
         super(holder);
         this.method = method;
-        this.objectDirtier = objectDirtier;
     }
 
     /**
@@ -56,28 +53,14 @@ public class CollectionAddToFacetViaAccessor extends CollectionAddToFacetAbstrac
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
-
-    /**
-     * Bytecode cannot automatically call
-     * {@link DomainObjectContainer#objectChanged(Object)} because cannot
-     * distinguish whether interacting with accessor to read it or to modify its
-     * contents.
-     */
-    @Override
-    public boolean impliesObjectChanged() {
-        return false;
-    }
-
-    @Override
-    public void add(final ObjectAdapter owningAdapter, final ObjectAdapter elementAdapter) {
+    public void add(
+            final ObjectAdapter owningAdapter,
+            final ObjectAdapter elementAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         @SuppressWarnings("unchecked")
         final Collection<? super Object> collection = (Collection<? super Object>) ObjectAdapter.InvokeUtils.invoke(method, owningAdapter);
         final Object elementPojo = ObjectAdapter.Util.unwrap(elementAdapter);
         collection.add(elementPojo);
-        getObjectDirtier().objectChanged(owningAdapter);
     }
 
     @Override
@@ -85,11 +68,4 @@ public class CollectionAddToFacetViaAccessor extends CollectionAddToFacetAbstrac
         return "method=" + method;
     }
 
-    // /////////////////////////////////////////////////////
-    // Dependencies
-    // /////////////////////////////////////////////////////
-
-    protected ObjectDirtier getObjectDirtier() {
-        return objectDirtier;
-    }
 }

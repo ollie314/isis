@@ -20,7 +20,6 @@
 package org.apache.isis.core.metamodel.facets.actions.action.publishing;
 
 import org.apache.isis.applib.annotation.Action;
-import org.apache.isis.applib.annotation.ActionSemantics;
 import org.apache.isis.applib.annotation.Publishing;
 import org.apache.isis.applib.annotation.PublishingPayloadFactoryForAction;
 import org.apache.isis.core.commons.config.IsisConfiguration;
@@ -51,14 +50,14 @@ public class PublishedActionFacetForActionAnnotation extends PublishedActionFace
                             throw new IllegalStateException("Require ActionSemanticsFacet in order to process");
                         }
 
-                        if(actionSemanticsFacet.value() == ActionSemantics.Of.SAFE) {
+                        if(actionSemanticsFacet.value().isSafeInNature()) {
                             return  null;
                         }
                         // else fall through
                     default:
                         final PublishingPayloadFactoryForAction publishingPayloadFactory = newPayloadFactory(action);
                         return action != null
-                                ? new PublishedActionFacetForActionAnnotation(publishingPayloadFactory, holder)
+                                ? new PublishedActionFacetForActionAnnotationAsConfigured(publishingPayloadFactory, holder)
                                 : new PublishedActionFacetFromConfiguration(publishingPayloadFactory, holder);
                 }
             case DISABLED:

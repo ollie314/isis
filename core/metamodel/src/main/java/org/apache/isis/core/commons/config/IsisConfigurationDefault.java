@@ -23,24 +23,41 @@ import java.awt.Color;
 import java.awt.Font;
 import java.util.Enumeration;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.StringTokenizer;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.isis.core.commons.debug.DebugBuilder;
+import org.apache.isis.applib.annotation.Programmatic;
 import org.apache.isis.core.commons.exceptions.IsisException;
 import org.apache.isis.core.commons.resource.ResourceStreamSource;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.configinternal.ConfigurationServiceInternal;
 
-public class IsisConfigurationDefault implements IsisConfiguration {
+/**
+ * This object will typically be registered as the implementation of the {@link ConfigurationServiceInternal}
+ * (internal) domain service, using
+ * {@link ServicesInjector#addFallbackIfRequired(Class, Object)}.
+ *
+ * <p>
+ *     If an integration test is running, then the <code>IsisConfigurationForJdoIntegTests</code> will be used instead.
+ * </p>
+ */
+public class IsisConfigurationDefault implements ConfigurationServiceInternal {
     
     private static final Logger LOG = LoggerFactory.getLogger(IsisConfigurationDefault.class);
-    private final Properties properties = new Properties();
     private final ResourceStreamSource resourceStreamSource;
+    private final Properties properties = new Properties();
+    /**
+     * derived lazily from {@link #properties}.
+     */
+    private Properties applicationProperties;
 
     // ////////////////////////////////////////////////
     // Constructor
@@ -91,36 +108,13 @@ public class IsisConfigurationDefault implements IsisConfiguration {
     }
     
     /**
-     * Add the properties from an existing Properties object; if the key exists in the configuration then will be ignored.
-     *
-     * @see #addPerPolicy(Properties, ContainsPolicy)
-     * @see #put(Properties)
+     * Add the properties from an existing Properties object.
      */
-    public void add(final Properties properties) {
-        addPerPolicy(properties, ContainsPolicy.IGNORE);
-    }
-
-    /**
-     * Add the properties from an existing Properties object; if the key exists in the configuration then will be overwritten.
-     *
-     * @see #add(Properties)
-     * @see #addPerPolicy(Properties, ContainsPolicy)
-     */
-    public void put(final Properties properties) {
-        addPerPolicy(properties, ContainsPolicy.OVERWRITE);
-    }
-
-    /**
-     * Add the properties from an existing Properties object; if the key exists in the configuration then the
-     * {@link ContainsPolicy} will be applied.
-     *
-     * @see #add(Properties)
-     * @see #put(Properties)
-     */
-    private void addPerPolicy(final Properties properties, final ContainsPolicy policy) {
+    @Programmatic
+    public void add(final Properties properties, final ContainsPolicy containsPolicy) {
         for(Object key: properties.keySet()) {
             Object value = properties.get(key);
-            addPerPolicy((String) key, (String) value, policy);
+            addPerPolicy((String) key, (String) value, containsPolicy);
         }
     }
     
@@ -131,6 +125,7 @@ public class IsisConfigurationDefault implements IsisConfiguration {
      * @see #addPerPolicy(String, String, ContainsPolicy)
      * @see #put(String, String)
      */
+    @Programmatic
     public void add(final String key, final String value) {
         addPerPolicy(key, value, ContainsPolicy.IGNORE);
     }
@@ -142,6 +137,7 @@ public class IsisConfigurationDefault implements IsisConfiguration {
      * @see #add(String, String)
      * @see #addPerPolicy(String, String, ContainsPolicy)
      */
+    @Programmatic
     public void put(final String key, final String value) {
         addPerPolicy(key, value, ContainsPolicy.OVERWRITE);
     }
@@ -228,7 +224,7 @@ public class IsisConfigurationDefault implements IsisConfiguration {
      */
     @Override
     public boolean getBoolean(final String name, final boolean defaultValue) {
-        String value = getProperty(name);
+        String value = getPropertyElseNull(name);
         if (value == null) {
             return defaultValue;
         }
@@ -266,29 +262,13 @@ public class IsisConfigurationDefault implements IsisConfiguration {
      */
     @Override
     public Color getColor(final String name, final Color defaultValue) {
-        final String color = getProperty(name);
+        final String color = getPropertyElseNull(name);
 
         if (color == null) {
             return defaultValue;
         }
 
         return Color.decode(color);
-    }
-
-    @Override
-    public void debugData(final DebugBuilder str) {
-        str.appendln("Resource Stream Source", resourceStreamSource);
-        str.appendln();
-        final Enumeration<?> names = properties.propertyNames();
-        while (names.hasMoreElements()) {
-            final String name = (String) names.nextElement();
-            str.appendln(name, properties.getProperty(name));
-        }
-    }
-
-    @Override
-    public String debugTitle() {
-        return "Properties Configuration";
     }
 
     /**
@@ -314,7 +294,7 @@ public class IsisConfigurationDefault implements IsisConfiguration {
      */
     @Override
     public Font getFont(final String name, final Font defaultValue) {
-        final String font = getProperty(name);
+        final String font = getPropertyElseNull(name);
 
         if (font == null) {
             return defaultValue;
@@ -346,7 +326,7 @@ public class IsisConfigurationDefault implements IsisConfiguration {
      */
     @Override
     public int getInteger(final String name, final int defaultValue) {
-        final String value = getProperty(name);
+        final String value = getPropertyElseNull(name);
 
         if (value == null) {
             return defaultValue;
@@ -385,21 +365,21 @@ public class IsisConfigurationDefault implements IsisConfiguration {
     public IsisConfiguration getProperties(final String withPrefix) {
         final int prefixLength = "".length();
 
-        final Properties pp = new Properties();
-        final Enumeration<?> e = properties.keys();
+        final Properties properties = new Properties();
+        final Enumeration<?> e = this.properties.keys();
         while (e.hasMoreElements()) {
             final String key = (String) e.nextElement();
             if (key.startsWith(withPrefix)) {
                 final String modifiedKey = key.substring(prefixLength);
-                pp.put(modifiedKey, properties.get(key));
+                properties.put(modifiedKey, this.properties.get(key));
             }
         }
         final IsisConfigurationDefault isisConfigurationDefault = new IsisConfigurationDefault(resourceStreamSource);
-        isisConfigurationDefault.add(pp);
+        isisConfigurationDefault.add(properties, ContainsPolicy.IGNORE);
         return isisConfigurationDefault;
     }
 
-    private String getProperty(final String name) {
+    private String getPropertyElseNull(final String name) {
         return getProperty(name, null);
     }
 
@@ -420,7 +400,7 @@ public class IsisConfigurationDefault implements IsisConfiguration {
      */
     @Override
     public String getString(final String name) {
-        return getProperty(name);
+        return getPropertyElseNull(name);
     }
 
     @Override
@@ -441,7 +421,12 @@ public class IsisConfigurationDefault implements IsisConfiguration {
 
     @Override
     public Iterator<String> iterator() {
-        return properties.stringPropertyNames().iterator();
+        return asIterable().iterator();
+    }
+
+    @Override
+    public Iterable<String> asIterable() {
+        return properties.stringPropertyNames();
     }
 
     /**
@@ -468,21 +453,50 @@ public class IsisConfigurationDefault implements IsisConfiguration {
     // ////////////////////////////////////////////////////////////////////
 
     @Override
-    public void injectInto(final Object candidate) {
-        if (IsisConfigurationAware.class.isAssignableFrom(candidate.getClass())) {
-            final IsisConfigurationAware cast = IsisConfigurationAware.class.cast(candidate);
-            cast.setConfiguration(this);
-        }
-    }
-
-    @Override
     public Map<String,String> asMap() {
         final Map<String, String> map = Maps.newHashMap();
-        for(String propertyName: this) {
-            final String propertyValue = this.getProperty(propertyName);
+        for(String propertyName: this.asIterable()) {
+            final String propertyValue = this.getPropertyElseNull(propertyName);
             map.put(propertyName, propertyValue);
         }
         return map;
     }
+
+
+    //region > ConfigurationService impl
+    @Override
+    public String getProperty(final String name) {
+        initAppPropertiesIfRequired();
+        return applicationProperties.getProperty(name);
+    }
+
+    private void initAppPropertiesIfRequired() {
+        if(applicationProperties == null) {
+            applicationProperties = deriveApplicationProperties();
+        }
+    }
+
+    private Properties deriveApplicationProperties() {
+        final Properties applicationProperties = new Properties();
+        final IsisConfiguration applicationConfiguration = getProperties("application");
+        for (final String key : applicationConfiguration.asIterable()) {
+            final String value = applicationConfiguration.getString(key);
+            final String newKey = key.substring("application.".length());
+            applicationProperties.setProperty(newKey, value);
+        }
+        return applicationProperties;
+    }
+
+
+    @Override
+    public List<String> getPropertyNames() {
+        initAppPropertiesIfRequired();
+        final List<String> list = Lists.newArrayList();
+        for (final Object key : applicationProperties.keySet()) {
+            list.add((String) key);
+        }
+        return list;
+    }
+    //endregion
 
 }

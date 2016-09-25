@@ -22,7 +22,6 @@ import java.util.List;
 
 import org.apache.isis.applib.annotation.Render;
 import org.apache.isis.applib.annotation.Where;
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.commons.config.IsisConfiguration;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
@@ -32,21 +31,23 @@ import org.apache.isis.viewer.restfulobjects.rendering.domainobjects.DomainObjec
 
 public interface RendererContext {
 
-    public String urlFor(final String url);
+    String urlFor(final String url);
 
-    public AuthenticationSession getAuthenticationSession();
+    AuthenticationSession getAuthenticationSession();
+
+    IsisConfiguration getConfiguration();
     
-    public IsisConfiguration getConfiguration();
-    
-    public PersistenceSession getPersistenceSession();
+    PersistenceSession getPersistenceSession();
 
-    public AdapterManager getAdapterManager();
+    /**
+     * @deprecated - replaced by {@link #getPersistenceSession()}.
+     */
+    @Deprecated
+    AdapterManager getAdapterManager();
 
-    public Where getWhere();
+    Where getWhere();
 
-    public List<List<String>> getFollowLinks();
-
-    public Localization getLocalization();
+    List<List<String>> getFollowLinks();
 
     boolean honorUiHints();
 
@@ -67,6 +68,6 @@ public interface RendererContext {
      * @param objectAdapter - the object proposed to be rendered eagerly 
      * @return whether this adapter has already been rendered (implying the caller should not render the value).
      */
-    public boolean canEagerlyRender(ObjectAdapter objectAdapter);
+    boolean canEagerlyRender(ObjectAdapter objectAdapter);
 
 }

@@ -19,16 +19,23 @@
 
 package org.apache.isis.core.runtime.system;
 
+import com.google.common.collect.Lists;
+
+import org.datanucleus.enhancement.Persistable;
+import org.jmock.Expectations;
+import org.jmock.auto.Mock;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+
 import org.apache.isis.applib.annotation.When;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facets.FacetedMethod;
 import org.apache.isis.core.metamodel.facets.all.describedas.DescribedAsFacetAbstract;
@@ -43,23 +50,25 @@ import org.apache.isis.core.metamodel.interactions.PropertyUsabilityContext;
 import org.apache.isis.core.metamodel.interactions.PropertyVisibilityContext;
 import org.apache.isis.core.metamodel.interactions.UsabilityContext;
 import org.apache.isis.core.metamodel.interactions.VisibilityContext;
-import org.apache.isis.core.metamodel.spec.Instance;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
+import org.apache.isis.core.metamodel.spec.ObjectSpecId;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.feature.ObjectMemberContext;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.metamodel.specloader.specimpl.ObjectMemberAbstract;
 import org.apache.isis.core.runtime.persistence.objectstore.transaction.PojoAdapterBuilder;
 import org.apache.isis.core.runtime.persistence.objectstore.transaction.PojoAdapterBuilder.Persistence;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2.Mode;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isEmptyString;
 import static org.hamcrest.Matchers.not;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class ObjectMemberAbstractTest {
 
@@ -70,15 +79,66 @@ public class ObjectMemberAbstractTest {
     
     private ObjectAdapter persistentAdapter;
     private ObjectAdapter transientAdapter;
-    
+
+    @Mock
+    private AuthenticationSessionProvider mockAuthenticationSessionProvider;
+    @Mock
+    private PersistenceSessionServiceInternal mockPersistenceSessionServiceInternal;
+    @Mock
+    private AuthenticationSession mockAuthenticationSession;
+    @Mock
+    private SpecificationLoader mockSpecificationLoader;
+
+    ServicesInjector stubServicesInjector;
+    private IsisConfigurationDefault stubConfiguration;
+
+    @Mock
+    private ObjectSpecification mockSpecForCustomer;
+
+    @Mock
+    private Persistable mockPersistable;
+
     @Before
     public void setUp() throws Exception {
         org.apache.log4j.Logger.getRootLogger().setLevel(org.apache.log4j.Level.OFF);
 
-        persistentAdapter = PojoAdapterBuilder.create().build();
-        transientAdapter = PojoAdapterBuilder.create().with(Persistence.TRANSIENT).build();
+        stubConfiguration = new IsisConfigurationDefault();
+        stubServicesInjector = new ServicesInjector(Lists.<Object>newArrayList(
+                mockSpecificationLoader, mockSpecificationLoader, mockPersistenceSessionServiceInternal), stubConfiguration);
 
-        testMember = new ObjectMemberAbstractImpl("id");
+        context.checking(new Expectations() {{
+            allowing(mockAuthenticationSessionProvider).getAuthenticationSession();
+            will(returnValue(mockAuthenticationSession));
+        }});
+        persistentAdapter = PojoAdapterBuilder.create()
+                                .with(mockSpecificationLoader)
+                                .withOid("CUS|1")
+                                .withPojo(mockPersistable)
+                                .build();
+        transientAdapter = PojoAdapterBuilder.create()
+                                .with(mockSpecificationLoader)
+                                .with(Persistence.TRANSIENT)
+                                .withPojo(mockPersistable)
+                                .build();
+
+        testMember = new ObjectMemberAbstractImpl("id", stubServicesInjector);
+
+        context.checking(new Expectations() {{
+            allowing(mockSpecificationLoader).lookupBySpecId(ObjectSpecId.of("CUS"));
+            will(returnValue(mockSpecForCustomer));
+            allowing(mockSpecificationLoader).loadSpecification(with(any(Class.class)));
+            will(returnValue(mockSpecForCustomer));
+
+            allowing(mockSpecForCustomer).isService();
+            will(returnValue(false));
+
+            allowing(mockSpecForCustomer).isViewModel();
+            will(returnValue(false));
+
+            allowing(mockSpecForCustomer).getShortIdentifier();
+            will(returnValue("Customer"));
+        }});
+
     }
 
     @Test
@@ -89,13 +149,13 @@ public class ObjectMemberAbstractTest {
 
     @Test
     public void testAvailableForUser() throws Exception {
-        testMember.addFacet(new DisableForSessionFacetAbstract(testMember) {
+        testMember.addFacet(new DisableForSessionFacetAbstract(testMember, mockAuthenticationSessionProvider) {
             @Override
             public String disabledReason(final AuthenticationSession session) {
                 return null;
             }
         });
-        final Consent usable = testMember.isUsable(null, persistentAdapter, Where.ANYWHERE);
+        final Consent usable = testMember.isUsable(persistentAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE);
         final boolean allowed = usable.isAllowed();
         assertTrue(allowed);
     }
@@ -109,7 +169,7 @@ public class ObjectMemberAbstractTest {
                 return null;
             }
         });
-        final Consent visible = testMember.isVisible(null, persistentAdapter, Where.ANYWHERE);
+        final Consent visible = testMember.isVisible(persistentAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE);
         assertTrue(visible.isAllowed());
     }
 
@@ -117,14 +177,32 @@ public class ObjectMemberAbstractTest {
     public void testVisibleWhenTargetPersistentAndHiddenFacetSetToOncePersisted() {
         testMember.addFacet(new HideForContextFacetNone(testMember));
         testMember.addFacet(new HiddenFacetAbstractImpl(When.ONCE_PERSISTED, Where.ANYWHERE, testMember){});
-        assertFalse(testMember.isVisible(null, persistentAdapter, Where.ANYWHERE).isAllowed());
+
+        context.checking(new Expectations() {{
+            allowing(mockPersistable).dnIsPersistent();
+            will(returnValue(true));
+            allowing(mockPersistable).dnIsDeleted();
+            will(returnValue(false));
+        }});
+
+
+        assertFalse(testMember.isVisible(persistentAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE).isAllowed());
     }
 
     @Test
     public void testVisibleWhenTargetPersistentAndHiddenFacetSetToUntilPersisted() {
         testMember.addFacet(new HideForContextFacetNone(testMember));
         testMember.addFacet(new HiddenFacetAbstractImpl(When.UNTIL_PERSISTED, Where.ANYWHERE, testMember){});
-        final Consent visible = testMember.isVisible(null, persistentAdapter, Where.ANYWHERE);
+
+        context.checking(new Expectations() {{
+            allowing(mockPersistable).dnIsPersistent();
+            will(returnValue(true));
+            allowing(mockPersistable).dnIsDeleted();
+            will(returnValue(false));
+        }});
+
+
+        final Consent visible = testMember.isVisible(persistentAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE);
         assertTrue(visible.isAllowed());
     }
 
@@ -132,43 +210,50 @@ public class ObjectMemberAbstractTest {
     public void testVisibleWhenTargetTransientAndHiddenFacetSetToUntilPersisted() {
         testMember.addFacet(new HideForContextFacetNone(testMember));
         testMember.addFacet(new HiddenFacetAbstractImpl(When.UNTIL_PERSISTED, Where.ANYWHERE, testMember){});
-        
-        final Consent visible = testMember.isVisible(null, transientAdapter, Where.ANYWHERE);
+
+        context.checking(new Expectations() {{
+            allowing(mockPersistable).dnIsPersistent();
+            will(returnValue(false));
+            allowing(mockPersistable).dnIsDeleted();
+            will(returnValue(false));
+        }});
+
+        final Consent visible = testMember.isVisible(transientAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE);
         assertFalse(visible.isAllowed());
     }
 
     @Test
     public void testVisibleDeclaratively() {
         testMember.addFacet(new HiddenFacetAbstractAlwaysEverywhere(testMember) {});
-        assertFalse(testMember.isVisible(null, persistentAdapter, Where.ANYWHERE).isAllowed());
+        assertFalse(testMember.isVisible(persistentAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE).isAllowed());
     }
 
     @Test
     public void testVisibleForSessionByDefault() {
-        final Consent visible = testMember.isVisible(null, persistentAdapter, Where.ANYWHERE);
+        final Consent visible = testMember.isVisible(persistentAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE);
         assertTrue(visible.isAllowed());
     }
 
     @Test
     public void testVisibleForSession() {
-        testMember.addFacet(new HideForSessionFacetAbstract(testMember) {
+        testMember.addFacet(new HideForSessionFacetAbstract(testMember, mockAuthenticationSessionProvider) {
             @Override
             public String hiddenReason(final AuthenticationSession session) {
                 return "Hidden";
             }
         });
-        assertFalse(testMember.isVisible(null, persistentAdapter, Where.ANYWHERE).isAllowed());
+        assertFalse(testMember.isVisible(persistentAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE).isAllowed());
     }
 
     @Test
     public void testVisibleForSessionFails() {
-        testMember.addFacet(new HideForSessionFacetAbstract(testMember) {
+        testMember.addFacet(new HideForSessionFacetAbstract(testMember, mockAuthenticationSessionProvider) {
             @Override
             public String hiddenReason(final AuthenticationSession session) {
                 return "hidden";
             }
         });
-        assertFalse(testMember.isVisible(null, persistentAdapter, Where.ANYWHERE).isAllowed());
+        assertFalse(testMember.isVisible(persistentAdapter, InteractionInitiatedBy.USER, Where.ANYWHERE).isAllowed());
     }
 
     @Test
@@ -198,15 +283,14 @@ class ObjectMemberAbstractImpl extends ObjectMemberAbstract {
         }
     }
 
-    protected ObjectMemberAbstractImpl(final String id) {
-        super(FacetedMethod.createForProperty(Customer.class, "firstName"), FeatureType.PROPERTY, new ObjectMemberContext(DeploymentCategory.PRODUCTION, null, null, null, null, null));
+    protected ObjectMemberAbstractImpl(final String id, final ServicesInjector servicesInjector) {
+        super(FacetedMethod.createForProperty(Customer.class, "firstName"), FeatureType.PROPERTY, servicesInjector);
     }
 
-    @Override
-    public String debugData() {
-        return null;
-    }
-
+    /**
+     * @deprecated - unused ?
+     */
+    @Deprecated
     public Consent isUsable(final ObjectAdapter target) {
         return null;
     }
@@ -217,22 +301,19 @@ class ObjectMemberAbstractImpl extends ObjectMemberAbstract {
     }
 
     @Override
-    public UsabilityContext<?> createUsableInteractionContext(final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter target, Where where) {
-        return new PropertyUsabilityContext(DeploymentCategory.PRODUCTION, session, invocationMethod, target, getIdentifier(), where);
+    public UsabilityContext<?> createUsableInteractionContext(
+            final ObjectAdapter target, final InteractionInitiatedBy interactionInitiatedBy,
+            Where where) {
+        return new PropertyUsabilityContext(target, getIdentifier(), interactionInitiatedBy, where);
     }
 
     @Override
-    public VisibilityContext<?> createVisibleInteractionContext(final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter targetObjectAdapter, Where where) {
-        return new PropertyVisibilityContext(DeploymentCategory.PRODUCTION, session, invocationMethod, targetObjectAdapter, getIdentifier(), where);
+    public VisibilityContext<?> createVisibleInteractionContext(
+            final ObjectAdapter targetObjectAdapter, final InteractionInitiatedBy interactionInitiatedBy,
+            Where where) {
+        return new PropertyVisibilityContext(targetObjectAdapter, getIdentifier(), interactionInitiatedBy,
+                where);
     }
 
-    // /////////////////////////////////////////////////////////////
-    // getInstance
-    // /////////////////////////////////////////////////////////////
-
-    @Override
-    public Instance getInstance(final ObjectAdapter adapter) {
-        return null;
-    }
 
 }

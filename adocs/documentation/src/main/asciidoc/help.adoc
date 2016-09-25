@@ -12,11 +12,12 @@ pass:[<br/><br/><br/>]
 == Help:
 
 * link:support.html[Mailing Lists]
-* link:http://isis.markmail.org/search/?q=[Mailing List Archives]
-* link:https://issues.apache.org/jira/browse/ISIS[JIRA]
-* link:http://github.com/apache/isis[Github mirror]
-* link:http://stackoverflow.com/questions/tagged/isis[Stack Overflow] (tagged=isis)
-* link:contributing.html[How to contribute]
+
+* Mailing List Archives: https://lists.apache.org/list.html?users&#0064;isis.apache.org[ASF Pony mail], http://isis.markmail.org/search/?q=[Markmail]
+* https://issues.apache.org/jira/browse/ISIS[JIRA]
+* http://github.com/apache/isis[Github mirror]
+* http://stackoverflow.com/questions/tagged/isis[Stack Overflow] (tagged=isis)
+* link:guides/dg.html#_dg_contributing[How to contribute]
 
 
 

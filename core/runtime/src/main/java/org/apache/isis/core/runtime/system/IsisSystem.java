@@ -19,27 +19,17 @@
 
 package org.apache.isis.core.runtime.system;
 
-import org.apache.isis.applib.fixtures.LogonFixture;
-import org.apache.isis.core.commons.components.ApplicationScopedComponent;
-import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
+/**
+ * @deprecated
+ */
+@Deprecated
+public class IsisSystem {
 
-public interface IsisSystem extends DebugSelection, ApplicationScopedComponent {
+    public static final String MSG_ARE_YOU_SURE = "Are you sure?";
+    public static final String MSG_CONFIRM = "Confirm";
+    public static final String MSG_CANCEL = "Cancel";
 
-    DeploymentType getDeploymentType();
+    private IsisSystem(){}
 
-    LogonFixture getLogonFixture();
-
-    /**
-     * Populated after {@link #init()}.
-     */
-    public IsisSessionFactory getSessionFactory();
-
-    /**
-     * Returns a <i>snapshot</i> of the {@link IsisConfiguration configuration}
-     * (although once the {@link IsisSystem} is completely initialized, will
-     * effectively be immutable).
-     */
-    IsisConfiguration getConfiguration();
 
 }

@@ -20,61 +20,35 @@ package org.apache.isis.objectstore.jdo.datanucleus.persistence.queries;
 
 import java.util.List;
 
-import javax.jdo.PersistenceManager;
-import javax.jdo.PersistenceManagerFactory;
 import javax.jdo.listener.InstanceLifecycleEvent;
-import javax.jdo.metadata.TypeMetadata;
 
 import com.google.common.collect.Lists;
 
+import org.datanucleus.enhancement.Persistable;
+
 import org.apache.isis.core.commons.ensure.Assert;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.runtime.system.context.IsisContext;
 import org.apache.isis.core.runtime.system.persistence.PersistenceQuery;
 import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
-import org.apache.isis.objectstore.jdo.datanucleus.DataNucleusObjectStore;
-import org.apache.isis.objectstore.jdo.datanucleus.persistence.FrameworkSynchronizer;
-import org.apache.isis.objectstore.jdo.datanucleus.persistence.FrameworkSynchronizer.CalledFrom;
 import org.apache.isis.objectstore.jdo.datanucleus.persistence.IsisLifecycleListener;
-import org.datanucleus.enhancer.Persistable;
 
 public abstract class PersistenceQueryProcessorAbstract<T extends PersistenceQuery>
         implements PersistenceQueryProcessor<T> {
 
-    private final PersistenceManager persistenceManager;
-    private final FrameworkSynchronizer frameworkSynchronizer;
 
-    protected PersistenceQueryProcessorAbstract(final PersistenceManager persistenceManager, final FrameworkSynchronizer frameworkSynchronizer) {
-        this.persistenceManager = persistenceManager;
-        this.frameworkSynchronizer = frameworkSynchronizer;
+    final PersistenceSession persistenceSession;
+
+    protected PersistenceQueryProcessorAbstract(final PersistenceSession persistenceSession) {
+        this.persistenceSession = persistenceSession;
     }
 
-    protected PersistenceManager getPersistenceManager() {
-        return persistenceManager;
-    }
-    
-    
-    // /////////////////////////////////////////////////////////////
-    // helpers for subclasses
-    // /////////////////////////////////////////////////////////////
 
-    protected PersistenceManagerFactory getPersistenceManagerFactory() {
-        return getPersistenceManager().getPersistenceManagerFactory();
-    }
-    
-    protected TypeMetadata getTypeMetadata(final String classFullName) {
-        return getPersistenceManagerFactory().getMetadata(classFullName);
-    }
-    
     /**
      * Traversing the provided list causes (or should cause) the
      * {@link IsisLifecycleListener#postLoad(InstanceLifecycleEvent) {
      * to be called.
      */
-    protected List<ObjectAdapter> loadAdapters(
-            final ObjectSpecification specification, final List<?> pojos) {
+    protected List<ObjectAdapter> loadAdapters(final List<?> pojos) {
         final List<ObjectAdapter> adapters = Lists.newArrayList();
         for (final Object pojo : pojos) {
         	// ought not to be necessary, however for some queries it seems that the 
@@ -82,11 +56,11 @@ public abstract class PersistenceQueryProcessorAbstract<T extends PersistenceQue
             ObjectAdapter adapter;
             if(pojo instanceof Persistable) {
                 // an entity
-                frameworkSynchronizer.postLoadProcessingFor((Persistable) pojo, CalledFrom.OS_QUERY);
-                adapter = getAdapterManager().getAdapterFor(pojo);
+                persistenceSession.initializeMapAndCheckConcurrency((Persistable) pojo);
+                adapter = persistenceSession.getAdapterFor(pojo);
             } else {
                 // a value type
-                adapter = getAdapterManager().adapterFor(pojo);
+                adapter = persistenceSession.adapterFor(pojo);
             }
             Assert.assertNotNull(adapter);
             adapters.add(adapter);
@@ -94,20 +68,5 @@ public abstract class PersistenceQueryProcessorAbstract<T extends PersistenceQue
         return adapters;
     }
 
-    // /////////////////////////////////////////////////////////////
-    // Dependencies (from context)
-    // /////////////////////////////////////////////////////////////
-
-    protected PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
-    }
-
-    protected AdapterManager getAdapterManager() {
-        return IsisContext.getPersistenceSession().getAdapterManager();
-    }
-
-    protected DataNucleusObjectStore getJdoObjectStore() {
-        return (DataNucleusObjectStore) IsisContext.getPersistenceSession().getObjectStore();
-    }
 
 }

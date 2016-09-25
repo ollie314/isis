@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.isis.core</groupId>
         <artifactId>isis</artifactId>
-        <version>1.9.0-SNAPSHOT</version>
+        <version>1.14.0-SNAPSHOT</version>
     </parent>
 
     <groupId>org.apache.isis.tool</groupId>
@@ -31,22 +31,21 @@
 
     <packaging>maven-plugin</packaging>
 
-    <name>Isis Maven Plugin (isis-maven-plugin)</name>
+    <name>Apache Isis Maven Plugin (isis-maven-plugin)</name>
     <description>
         Maven plugin for Apache Isis, allowing the metamodel to be validated as part of the build process.
     </description>
 
-    <properties>
-        <siteBaseDir>..</siteBaseDir>
-        <relativeUrl>maven-plugin/</relativeUrl>
-    </properties>
-
-    <!-- used in Site generation for relative references. -->
-    <url>http://isis.apache.org/${relativeUrl}</url>
-
     <prerequisites>
         <maven>3.0.4</maven>
     </prerequisites>
+
+    <properties>
+        <maven-core.version>3.3.9</maven-core.version>
+        <maven-project.version>3.0-alpha-2</maven-project.version>
+        <maven-plugin-annotations.version>3.4</maven-plugin-annotations.version>
+        <plexus-container-default.version>1.7</plexus-container-default.version>
+    </properties>
 
     <build>
 
@@ -98,28 +97,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <!--
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-toolchains-plugin</artifactId>
-                <version>1.0</version>
-                <executions>
-                    <execution>
-                        <phase>validate</phase>
-                        <goals>
-                            <goal>toolchain</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <toolchains>
-                        <jdk>
-                            <version>1.5</version>
-                        </jdk>
-                    </toolchains>
-                </configuration>
-            </plugin>
-             -->
         </plugins>
     </build>
 
@@ -144,19 +121,19 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-plugin-api</artifactId>
-            <version>3.0.5</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.codehaus.plexus</groupId>
-            <artifactId>plexus-utils</artifactId>
-            <version>2.1</version>
+            <version>${maven-core.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.codehaus.plexus</groupId>
+                    <artifactId>plexus-component-annotations</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
             <groupId>org.apache.maven.plugin-tools</groupId>
             <artifactId>maven-plugin-annotations</artifactId>
-            <version>3.2</version>
+            <version>${maven-plugin-annotations.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.apache.maven</groupId>
@@ -168,11 +145,19 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-core</artifactId>
-            <version>3.0.5</version>
+            <version>${maven-core.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.codehaus.plexus</groupId>
                     <artifactId>plexus-utils</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.codehaus.plexus</groupId>
+                    <artifactId>:plexus-sec-dispatcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.inject</groupId>
+                    <artifactId>guice</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -180,7 +165,7 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-model</artifactId>
-            <version>3.0.5</version>
+            <version>${maven-core.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.codehaus.plexus</groupId>
@@ -192,7 +177,7 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-model-builder</artifactId>
-            <version>3.0.5</version>
+            <version>${maven-core.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.codehaus.plexus</groupId>
@@ -204,7 +189,7 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-settings</artifactId>
-            <version>3.0.5</version>
+            <version>${maven-core.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.codehaus.plexus</groupId>
@@ -216,7 +201,7 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-artifact</artifactId>
-            <version>3.0.5</version>
+            <version>${maven-core.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.codehaus.plexus</groupId>
@@ -228,7 +213,7 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-project</artifactId>
-            <version>3.0-alpha-2</version>
+            <version>${maven-project.version}</version>
             <exclusions>
                 <!-- for dependency convergence -->
                 <exclusion>
@@ -261,7 +246,7 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-compat</artifactId>
-            <version>3.0.5</version>
+            <version>${maven-core.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.codehaus.plexus</groupId>
@@ -273,7 +258,7 @@
         <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-container-default</artifactId>
-            <version>1.5.5</version>
+            <version>${plexus-container-default.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.codehaus.plexus</groupId>
@@ -291,21 +276,9 @@
         </dependency>
 
         <dependency>
-            <groupId>org.sonatype.plexus</groupId>
-            <artifactId>plexus-sec-dispatcher</artifactId>
-            <version>1.3</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.codehaus.plexus</groupId>
-                    <artifactId>plexus-utils</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-toolchain</artifactId>
-            <version>3.0-alpha-2</version>
+            <version>${maven-project.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.apache.maven</groupId>
@@ -318,11 +291,6 @@
             </exclusions>
         </dependency>
 
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
 </project>

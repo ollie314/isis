@@ -20,7 +20,6 @@ package org.apache.isis.objectstore.jdo.datanucleus.persistence.queries;
 
 import java.util.List;
 
-import javax.jdo.PersistenceManager;
 import javax.jdo.Query;
 
 import org.slf4j.Logger;
@@ -29,14 +28,14 @@ import org.slf4j.LoggerFactory;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.runtime.persistence.query.PersistenceQueryFindAllInstances;
-import org.apache.isis.objectstore.jdo.datanucleus.persistence.FrameworkSynchronizer;
+import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
 
 public class PersistenceQueryFindAllInstancesProcessor extends PersistenceQueryProcessorAbstract<PersistenceQueryFindAllInstances> {
 
     private static final Logger LOG = LoggerFactory.getLogger(PersistenceQueryFindAllInstancesProcessor.class);
 
-    public PersistenceQueryFindAllInstancesProcessor(final PersistenceManager persistenceManager, final FrameworkSynchronizer frameworkSynchronizer) {
-        super(persistenceManager, frameworkSynchronizer);
+    public PersistenceQueryFindAllInstancesProcessor(final PersistenceSession persistenceSession) {
+        super(persistenceSession);
     }
 
     public List<ObjectAdapter> process(final PersistenceQueryFindAllInstances persistenceQuery) {
@@ -44,7 +43,7 @@ public class PersistenceQueryFindAllInstancesProcessor extends PersistenceQueryP
         final ObjectSpecification specification = persistenceQuery.getSpecification();
         
         Class<?> cls = specification.getCorrespondingClass();
-        final Query jdoQuery = getPersistenceManager().newQuery(cls);
+        final Query jdoQuery = persistenceSession.newJdoQuery(cls);
         
         // http://www.datanucleus.org/servlet/jira/browse/NUCCORE-1103
         jdoQuery.addExtension("datanucleus.multivaluedFetch", "none");
@@ -55,7 +54,7 @@ public class PersistenceQueryFindAllInstancesProcessor extends PersistenceQueryP
 
         try {
             final List<?> pojos = (List<?>) jdoQuery.execute();
-            return loadAdapters(specification, pojos);
+            return loadAdapters(pojos);
         } finally {
             jdoQuery.closeAll();
         }

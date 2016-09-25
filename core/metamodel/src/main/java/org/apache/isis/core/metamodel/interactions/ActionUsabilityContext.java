@@ -22,21 +22,34 @@ package org.apache.isis.core.metamodel.interactions;
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.events.ActionUsabilityEvent;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.InteractionContextType;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
+
 import static org.apache.isis.core.metamodel.adapter.ObjectAdapter.Util.unwrap;
 
 /**
  * See {@link InteractionContext} for overview; analogous to
  * {@link ActionUsabilityEvent}.
  */
-public class ActionUsabilityContext extends UsabilityContext<ActionUsabilityEvent> {
+public class ActionUsabilityContext extends UsabilityContext<ActionUsabilityEvent> implements ActionInteractionContext {
 
-    public ActionUsabilityContext(DeploymentCategory deploymentCategory, final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter target, final Identifier id, Where where) {
-        super(InteractionContextType.ACTION_USABLE, deploymentCategory, session, invocationMethod, id, target, where);
+    private final ObjectAction objectAction;
+
+    public ActionUsabilityContext(
+            final ObjectAdapter targetAdapter,
+            final ObjectAction objectAction,
+            final Identifier id,
+            final InteractionInitiatedBy interactionInitiatedBy,
+            final Where where) {
+        super(InteractionContextType.ACTION_USABLE, targetAdapter, id, interactionInitiatedBy, where);
+        this.objectAction = objectAction;
+    }
+
+    @Override
+    public ObjectAction getObjectAction() {
+        return objectAction;
     }
 
     @Override

@@ -35,6 +35,7 @@ public class ChoicesFacetFromBoundedAnnotationFactoryTest extends AbstractFacetF
         super.setUp();
 
         facetFactory = new DomainObjectAnnotationFacetFactory();
+        facetFactory.setServicesInjector(stubServicesInjector);
     }
 
     @Override

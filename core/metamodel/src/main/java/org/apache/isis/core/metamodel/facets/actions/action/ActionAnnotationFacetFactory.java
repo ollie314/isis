@@ -24,6 +24,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+
 import org.apache.isis.applib.annotation.Action;
 import org.apache.isis.applib.annotation.ActionInteraction;
 import org.apache.isis.applib.annotation.ActionSemantics;
@@ -41,9 +42,6 @@ import org.apache.isis.applib.services.HasTransactionId;
 import org.apache.isis.applib.services.eventbus.ActionDomainEvent;
 import org.apache.isis.applib.services.eventbus.ActionInvokedEvent;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManagerAware;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
@@ -54,6 +52,7 @@ import org.apache.isis.core.metamodel.facets.FacetedMethod;
 import org.apache.isis.core.metamodel.facets.actcoll.typeof.TypeOfFacet;
 import org.apache.isis.core.metamodel.facets.actcoll.typeof.TypeOfFacetInferredFromArray;
 import org.apache.isis.core.metamodel.facets.actcoll.typeof.TypeOfFacetInferredFromGenerics;
+import org.apache.isis.core.metamodel.facets.actions.action.bulk.BulkFacetObjectOnly;
 import org.apache.isis.core.metamodel.facets.actions.action.bulk.BulkFacetForActionAnnotation;
 import org.apache.isis.core.metamodel.facets.actions.action.bulk.BulkFacetForBulkAnnotation;
 import org.apache.isis.core.metamodel.facets.actions.action.command.CommandFacetForActionAnnotation;
@@ -88,16 +87,15 @@ import org.apache.isis.core.metamodel.facets.actions.publish.PublishedActionFace
 import org.apache.isis.core.metamodel.facets.actions.semantics.ActionSemanticsFacet;
 import org.apache.isis.core.metamodel.facets.all.hide.HiddenFacet;
 import org.apache.isis.core.metamodel.facets.members.disabled.DisabledFacet;
-import org.apache.isis.core.metamodel.runtimecontext.RuntimeContext;
-import org.apache.isis.core.metamodel.runtimecontext.RuntimeContextAware;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjectorAware;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.specloader.collectiontyperegistry.CollectionTypeRegistry;
+import org.apache.isis.core.metamodel.specloader.CollectionUtils;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorForDeprecatedAnnotation;
+import org.apache.isis.core.metamodel.util.EventUtil;
 
-public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implements ServicesInjectorAware, IsisConfigurationAware, AdapterManagerAware, RuntimeContextAware, MetaModelValidatorRefiner {
+public class ActionAnnotationFacetFactory extends FacetFactoryAbstract
+            implements MetaModelValidatorRefiner {
 
     private final MetaModelValidatorForDeprecatedAnnotation actionSemanticsValidator = new MetaModelValidatorForDeprecatedAnnotation(ActionSemantics.class);
     private final MetaModelValidatorForDeprecatedAnnotation actionInteractionValidator = new MetaModelValidatorForDeprecatedAnnotation(ActionInteraction.class);
@@ -113,12 +111,6 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
     private final MetaModelValidatorForDeprecatedAnnotation prototypeValidator = new MetaModelValidatorForDeprecatedAnnotation(Prototype.class);
 
 
-    private ServicesInjector servicesInjector;
-    private IsisConfiguration configuration;
-    private AdapterManager adapterManager;
-    private RuntimeContext runtimeContext;
-
-    private final CollectionTypeRegistry collectionTypeRegistry = new CollectionTypeRegistry();
 
     public ActionAnnotationFacetFactory() {
         super(FeatureType.ACTIONS_ONLY);
@@ -197,8 +189,13 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
                 actionDomainEventFacet = new ActionDomainEventFacetDefault(
                         actionDomainEventType, servicesInjector, getSpecificationLoader(), holder);
             }
-            FacetUtil.addFacet(actionDomainEventFacet);
-
+            if(EventUtil.eventTypeIsPostable(
+                    actionDomainEventFacet.getEventType(),
+                    ActionDomainEvent.Noop.class,
+                    ActionDomainEvent.Default.class,
+                    "isis.reflector.facet.actionAnnotation.domainEvent.postForDefault", getConfiguration())) {
+                FacetUtil.addFacet(actionDomainEventFacet);
+            }
 
             // replace the current actionInvocationFacet with one that will
             // emit the appropriate domain event and then delegate onto the underlying
@@ -209,27 +206,31 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
                 final Class<? extends ActionInvokedEvent<?>> actionInvokedEventType = postsActionInvokedEvent.value();
                 actionInvocationFacet = actionInteractionValidator.flagIfPresent(
                         new ActionInvocationFacetForPostsActionInvokedEventAnnotation(
-                                actionInvokedEventType, actionMethod, typeSpec, returnSpec, actionDomainEventFacet, holder,
-                                getRuntimeContext(), getAdapterManager(), getServicesInjector()), processMethodContext);
+                                actionInvokedEventType, actionMethod, typeSpec, returnSpec, holder,
+                                servicesInjector
+                        ), processMethodContext);
             } else
             // deprecated (but more recently)
             if (actionInteraction != null) {
                 actionInvocationFacet = actionInteractionValidator.flagIfPresent(
                         new ActionInvocationFacetForDomainEventFromActionInteractionAnnotation(
-                                actionDomainEventType, actionMethod, typeSpec, returnSpec, actionDomainEventFacet, holder,
-                                getRuntimeContext(), getAdapterManager(), getServicesInjector()), processMethodContext);
+                                actionDomainEventType, actionMethod, typeSpec, returnSpec, holder,
+                                servicesInjector
+                        ), processMethodContext);
             } else
             // current
             if (action != null) {
                 actionInvocationFacet = new ActionInvocationFacetForDomainEventFromActionAnnotation(
-                        actionDomainEventType, actionMethod, typeSpec, returnSpec, actionDomainEventFacet, holder,
-                        getRuntimeContext(), getAdapterManager(), getServicesInjector());
+                        actionDomainEventType, actionMethod, typeSpec, returnSpec, holder,
+                        servicesInjector
+                );
             } else
             // default
             {
                 actionInvocationFacet = new ActionInvocationFacetForDomainEventFromDefault(
-                        actionDomainEventType, actionMethod, typeSpec, returnSpec, actionDomainEventFacet, holder,
-                        getRuntimeContext(), getAdapterManager(), getServicesInjector());
+                        actionDomainEventType, actionMethod, typeSpec, returnSpec, holder,
+                        servicesInjector
+                );
             }
             FacetUtil.addFacet(actionInvocationFacet);
 
@@ -244,7 +245,9 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
 
         // check for deprecated @Hidden
         final Hidden hiddenAnnotation = Annotations.getAnnotation(processMethodContext.getMethod(), Hidden.class);
-        HiddenFacet facet = hiddenValidator.flagIfPresent(HiddenFacetForHiddenAnnotationOnAction.create(hiddenAnnotation, holder), processMethodContext);
+        HiddenFacet facet = hiddenValidator
+                .flagIfPresent(HiddenFacetForHiddenAnnotationOnAction.create(hiddenAnnotation, holder),
+                        processMethodContext);
 
         // else search for @Action(hidden=...)
         final Action action = Annotations.getAnnotation(method, Action.class);
@@ -260,7 +263,9 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
 
         // check for deprecated @Disabled
         final Disabled annotation = Annotations.getAnnotation(method, Disabled.class);
-        DisabledFacet facet = disabledValidator.flagIfPresent(DisabledFacetForDisabledAnnotationOnAction.create(annotation, holder), processMethodContext);
+        DisabledFacet facet = disabledValidator
+                .flagIfPresent(DisabledFacetForDisabledAnnotationOnAction.create(annotation, holder),
+                        processMethodContext);
 
         // there is no equivalent in @Action(...)
 
@@ -273,14 +278,16 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
 
         // check for deprecated @Prototype
         final Prototype annotation = Annotations.getAnnotation(method, Prototype.class);
-        final PrototypeFacet facet1 = PrototypeFacetForPrototypeAnnotation.create(annotation, holder);
+        final PrototypeFacet facet1 = PrototypeFacetForPrototypeAnnotation.create(annotation, holder,
+                getDeploymentCategory());
         FacetUtil.addFacet(prototypeValidator.flagIfPresent(facet1, processMethodContext));
         PrototypeFacet facet = facet1;
 
         // else search for @Action(restrictTo=...)
         final Action action = Annotations.getAnnotation(method, Action.class);
         if(facet == null) {
-            facet = PrototypeFacetForActionAnnotation.create(action, holder);
+            facet = PrototypeFacetForActionAnnotation.create(action, holder,
+                    getDeploymentCategory());
         }
         FacetUtil.addFacet(facet);
     }
@@ -336,6 +343,9 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
         if(facet == null) {
             facet = BulkFacetForActionAnnotation.create(action, holder);
         }
+        if(facet == null) {
+            facet = new BulkFacetObjectOnly(holder);
+        }
 
         FacetUtil.addFacet(facet);
     }
@@ -367,7 +377,7 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
 
         // else check for @Action(command=...)
         if(commandFacet == null) {
-            commandFacet = CommandFacetForActionAnnotation.create(action, configuration, holder);
+            commandFacet = CommandFacetForActionAnnotation.create(action, getConfiguration(), holder);
         }
 
         FacetUtil.addFacet(commandFacet);
@@ -398,7 +408,7 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
 
         // else check for @Action(publishing=...)
         if(facet == null) {
-            facet = PublishedActionFacetForActionAnnotation.create(action, configuration, holder);
+            facet = PublishedActionFacetForActionAnnotation.create(action, getConfiguration(), holder);
         }
 
         FacetUtil.addFacet(facet);
@@ -410,7 +420,7 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
         final FacetedMethod holder = processMethodContext.getFacetHolder();
 
         final Class<?> methodReturnType = method.getReturnType();
-        if (!collectionTypeRegistry.isCollectionType(methodReturnType) && !collectionTypeRegistry.isArrayType(methodReturnType)) {
+        if (!CollectionUtils.isCollectionType(methodReturnType) && !CollectionUtils.isArrayType(methodReturnType)) {
             return;
         }
 
@@ -520,14 +530,11 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
 
     // ///////////////////////////////////////////////////////////////
 
-    @Override
-    public void setServicesInjector(final ServicesInjector servicesInjector) {
-        this.servicesInjector = servicesInjector;
-    }
 
     @Override
-    public void setConfiguration(final IsisConfiguration configuration) {
-        this.configuration = configuration;
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        final IsisConfiguration configuration = getConfiguration();
 
         actionSemanticsValidator.setConfiguration(configuration);
         actionInteractionValidator.setConfiguration(configuration);
@@ -543,26 +550,5 @@ public class ActionAnnotationFacetFactory extends FacetFactoryAbstract implement
         prototypeValidator.setConfiguration(configuration);
     }
 
-    @Override
-    public void setAdapterManager(final AdapterManager adapterManager) {
-        this.adapterManager = adapterManager;
-    }
-
-    private AdapterManager getAdapterManager() {
-        return adapterManager;
-    }
-
-    private ServicesInjector getServicesInjector() {
-        return servicesInjector;
-    }
-
-    private RuntimeContext getRuntimeContext() {
-        return runtimeContext;
-    }
-
-    @Override
-    public void setRuntimeContext(final RuntimeContext runtimeContext) {
-        this.runtimeContext = runtimeContext;
-    }
 
 }

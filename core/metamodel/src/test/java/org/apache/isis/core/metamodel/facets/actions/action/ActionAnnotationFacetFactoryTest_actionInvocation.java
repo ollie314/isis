@@ -20,6 +20,7 @@
 package org.apache.isis.core.metamodel.facets.actions.action;
 
 import java.lang.reflect.Method;
+
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryTest;
 import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessMethodContext;
@@ -44,12 +45,15 @@ public class ActionAnnotationFacetFactoryTest_actionInvocation extends AbstractF
 
     public void setUp() throws Exception {
         super.setUp();
-        facetFactory = new ActionAnnotationFacetFactory();
-        facetFactory.setSpecificationLookup(programmableReflector);
+        this.facetFactory =  new ActionAnnotationFacetFactory();;
+
+        facetFactory.setServicesInjector(stubServicesInjector);
+
     }
 
     public void testActionInvocationFacetIsInstalledAndMethodRemoved() {
-        programmableReflector.setLoadSpecificationStringReturn(voidSpec);
+
+        allowing_specificationLoader_loadSpecification_any_willReturn(voidSpec);
 
         class Customer {
             @SuppressWarnings("unused")
@@ -70,7 +74,8 @@ public class ActionAnnotationFacetFactoryTest_actionInvocation extends AbstractF
     }
 
     public void testActionReturnTypeWhenVoid() {
-        programmableReflector.setLoadSpecificationStringReturn(voidSpec);
+
+        allowing_specificationLoader_loadSpecification_any_willReturn(voidSpec);
 
         class Customer {
             @SuppressWarnings("unused")
@@ -87,7 +92,8 @@ public class ActionAnnotationFacetFactoryTest_actionInvocation extends AbstractF
     }
 
     public void testActionReturnTypeWhenNotVoid() {
-        programmableReflector.setLoadSpecificationStringReturn(stringSpec);
+
+        allowing_specificationLoader_loadSpecification_any_willReturn(stringSpec);
 
         class Customer {
             @SuppressWarnings("unused")
@@ -105,7 +111,8 @@ public class ActionAnnotationFacetFactoryTest_actionInvocation extends AbstractF
     }
 
     public void testActionOnType() {
-        programmableReflector.setLoadSpecificationStringReturn(customerSpec);
+
+        allowing_specificationLoader_loadSpecification_any_willReturn(customerSpec);
 
         class Customer {
             @SuppressWarnings("unused")
@@ -123,7 +130,8 @@ public class ActionAnnotationFacetFactoryTest_actionInvocation extends AbstractF
     }
 
     public void testActionsPickedUpFromSuperclass() {
-        programmableReflector.setLoadSpecificationStringReturn(voidSpec);
+
+        allowing_specificationLoader_loadSpecification_any_willReturn(voidSpec);
 
         class Customer {
             @SuppressWarnings("unused")
@@ -145,15 +153,19 @@ public class ActionAnnotationFacetFactoryTest_actionInvocation extends AbstractF
     }
 
     public void testActionsPickedUpFromSuperclassButHelpersFromSubClass() {
-        programmableReflector.setLoadSpecificationStringReturn(voidSpec);
+
+        allowing_specificationLoader_loadSpecification_any_willReturn(voidSpec);
+
 
         final ActionParameterChoicesFacetViaMethodFactory facetFactoryForChoices = new ActionParameterChoicesFacetViaMethodFactory();
-        facetFactoryForChoices.setSpecificationLookup(programmableReflector);
-        programmableReflector.setLoadSpecificationStringReturn(voidSpec);
+        facetFactoryForChoices.setServicesInjector(stubServicesInjector);
+
+        facetFactoryForChoices.setServicesInjector(stubServicesInjector);
+
 
         final DisableForContextFacetViaMethodFactory facetFactoryForDisable = new DisableForContextFacetViaMethodFactory();
-        facetFactoryForDisable.setSpecificationLookup(programmableReflector);
-        programmableReflector.setLoadSpecificationStringReturn(voidSpec);
+        facetFactoryForDisable.setServicesInjector(stubServicesInjector);
+
 
         class Customer {
             @SuppressWarnings("unused")

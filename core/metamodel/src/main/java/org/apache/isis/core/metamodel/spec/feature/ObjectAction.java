@@ -19,46 +19,40 @@ package org.apache.isis.core.metamodel.spec.feature;
 
 import java.util.List;
 
+import com.google.common.base.Predicate;
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.annotation.ActionLayout;
 import org.apache.isis.applib.annotation.ActionSemantics;
 import org.apache.isis.applib.annotation.Bulk;
-import org.apache.isis.core.metamodel.facets.members.cssclassfa.CssClassFaPosition;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.filter.Filter;
 import org.apache.isis.applib.value.Blob;
 import org.apache.isis.applib.value.Clob;
-import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.commons.lang.StringFunctions;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetFilters;
+import org.apache.isis.core.metamodel.facets.actions.action.invocation.ActionInvocationFacet;
 import org.apache.isis.core.metamodel.facets.actions.bulk.BulkFacet;
 import org.apache.isis.core.metamodel.facets.actions.position.ActionPositionFacet;
 import org.apache.isis.core.metamodel.facets.all.named.NamedFacet;
 import org.apache.isis.core.metamodel.facets.members.cssclass.CssClassFacet;
 import org.apache.isis.core.metamodel.facets.members.cssclassfa.CssClassFaFacet;
+import org.apache.isis.core.metamodel.facets.members.cssclassfa.CssClassFaPosition;
 import org.apache.isis.core.metamodel.facets.members.order.MemberOrderFacet;
 import org.apache.isis.core.metamodel.facets.object.wizard.WizardFacet;
-import org.apache.isis.core.metamodel.interactions.AccessContext;
-import org.apache.isis.core.metamodel.interactions.ActionInvocationContext;
 import org.apache.isis.core.metamodel.interactions.ValidatingInteractionAdvisor;
 import org.apache.isis.core.metamodel.spec.ActionType;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 
-import com.google.common.base.Functions;
-import com.google.common.base.Predicate;
-import com.google.common.base.Strings;
-import com.google.common.collect.Lists;
-
 public interface ObjectAction extends ObjectMember {
 
-    // //////////////////////////////////////////////////////
-    // semantics, realTarget, getOnType
-    // //////////////////////////////////////////////////////
-
+    //region > getSemantics, getOnType
     /**
      * The semantics of this action.
      */
@@ -69,19 +63,17 @@ public interface ObjectAction extends ObjectMember {
      * invoked upon.
      */
     ObjectSpecification getOnType();
+    //endregion
 
-    boolean promptForParameters(ObjectAdapter target);
-
-    // //////////////////////////////////////////////////////////////////
-    // Type
-    // //////////////////////////////////////////////////////////////////
+    //region > getType, isPrototype
 
     ActionType getType();
 
-    // //////////////////////////////////////////////////////////////////
-    // ReturnType
-    // //////////////////////////////////////////////////////////////////
+    boolean isPrototype();
 
+    //endregion
+
+    //region > ReturnType
     /**
      * Returns the specifications for the return type.
      */
@@ -93,54 +85,50 @@ public interface ObjectAction extends ObjectMember {
      */
     boolean hasReturn();
 
-    // //////////////////////////////////////////////////////////////////
-    // execute, executeWithRuleChecking
-    // //////////////////////////////////////////////////////////////////
+    //endregion
+
+    //region > execute, executeWithRuleChecking
 
     /**
      * Invokes the action's method on the target object given the specified set
      * of parameters, checking the visibility, usability and validity first.
+     *
+     * @param mixedInAdapter - will be null for regular actions, and for mixin actions.  When a mixin action invokes its underlying mixedIn action, then will be populated (so that the ActionDomainEvent can correctly provide the underlying mixin)
      */
     ObjectAdapter executeWithRuleChecking(
             final ObjectAdapter target,
+            final ObjectAdapter mixedInAdapter,
             final ObjectAdapter[] parameters,
-            final AuthenticationSession authenticationSession,
+            final InteractionInitiatedBy interactionInitiatedBy,
             final Where where) throws AuthorizationException;
 
     /**
      * Invokes the action's method on the target object given the specified set
      * of parameters.
-     */
-    ObjectAdapter execute(ObjectAdapter target, ObjectAdapter[] parameters);
-
-    // //////////////////////////////////////////////////////////////////
-    // valid
-    // //////////////////////////////////////////////////////////////////
-
-/**
-     * Creates an {@link ActionInvocationContext interaction context}
-     * representing an attempt to invoke this action.
      *
-     * <p>
-     * Typically it is easier to just call
-     * {@link #isProposedArgumentSetValid(ObjectAdapter, ObjectAdapter[])
-     *
-     * @link #isProposedArgumentSetValidResultSet(ObjectAdapter,
-     *       ObjectAdapter[])}; this is provided as API for symmetry with
-     *       interactions (such as {@link AccessContext} accesses) have no
-     *       corresponding vetoing methods.
+     * @param mixedInAdapter - will be null for regular actions, and for mixin actions.  When a mixin action invokes its underlying mixedIn action, then will be populated (so that the ActionDomainEvent can correctly provide the underlying mixin)
      */
-    public ActionInvocationContext createActionInvocationInteractionContext(AuthenticationSession session,
-            InteractionInvocationMethod invocationMethod, ObjectAdapter targetObject, ObjectAdapter[] proposedArguments);
+    ObjectAdapter execute(
+            ObjectAdapter targetAdapter,
+            ObjectAdapter mixedInAdapter,
+            ObjectAdapter[] parameters,
+            final InteractionInitiatedBy interactionInitiatedBy);
+
+    //endregion
+
+    //region > isProposedArgumentSetValid
 
     /**
      * Whether the provided argument set is valid, represented as a {@link Consent}.
      */
-    Consent isProposedArgumentSetValid(ObjectAdapter object, ObjectAdapter[] proposedArguments);
+    Consent isProposedArgumentSetValid(
+            ObjectAdapter object,
+            ObjectAdapter[] proposedArguments,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
-    // //////////////////////////////////////////////////////
-    // Parameters (declarative)
-    // //////////////////////////////////////////////////////
+    //endregion
+
+    //region > Parameters (declarative)
 
     /**
      * Returns the number of parameters used by this method.
@@ -180,9 +168,9 @@ public interface ObjectAction extends ObjectMember {
      */
     ObjectActionParameter getParameterByName(String paramName);
 
-    // //////////////////////////////////////////////////////
-    // Parameters (per instance)
-    // //////////////////////////////////////////////////////
+    //endregion
+
+    //region > Parameters (per instance)
 
     /**
      * Returns the defaults references/values to be used for the action.
@@ -193,12 +181,23 @@ public interface ObjectAction extends ObjectMember {
      * Returns a list of possible references/values for each parameter, which
      * the user can choose from.
      */
-    ObjectAdapter[][] getChoices(ObjectAdapter target);
+    ObjectAdapter[][] getChoices(
+            final ObjectAdapter target,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
-    // //////////////////////////////////////////////////////
-    // Utils
-    // //////////////////////////////////////////////////////
+    //endregion
 
+    //region > setupBulkActionInvocationContext
+    /**
+     * internal API, called by {@link ActionInvocationFacet} if the action is actually executed (ie in the foreground).
+     */
+    void setupBulkActionInvocationContext(
+            final ObjectAdapter targetAdapter);
+
+
+    //endregion
+
+    //region > Utils
     public static final class Utils {
 
         private Utils() {
@@ -226,10 +225,6 @@ public interface ObjectAction extends ObjectMember {
                 }
             }
             return blobOrClob;
-        }
-
-        public static boolean isExplorationOrPrototype(final ObjectAction action) {
-            return action.getType().isExploration() || action.getType().isPrototype();
         }
 
         public static String actionIdentifierFor(final ObjectAction action) {
@@ -267,19 +262,21 @@ public interface ObjectAction extends ObjectMember {
 
     }
 
-    // //////////////////////////////////////////////////////
-    // Predicates
-    // //////////////////////////////////////////////////////
+    //endregion
+
+    //region > Predicates
 
     public static final class Predicates {
 
         private Predicates() {
         }
 
-        public static Predicate<ObjectAction> dynamicallyVisible(final AuthenticationSession session,
-                final ObjectAdapter target, final Where where) {
+        public static Predicate<ObjectAction> dynamicallyVisible(
+                final ObjectAdapter target,
+                final InteractionInitiatedBy interactionInitiatedBy,
+                final Where where) {
             return org.apache.isis.applib.filter.Filters
-                    .asPredicate(Filters.dynamicallyVisible(session, target, where));
+                    .asPredicate(Filters.dynamicallyVisible(target, interactionInitiatedBy, where));
         }
 
         public static Predicate<ObjectAction> withId(final String actionId) {
@@ -298,6 +295,7 @@ public interface ObjectAction extends ObjectMember {
             return org.apache.isis.applib.filter.Filters.asPredicate(Filters.bulk());
         }
 
+        // UNUSED?
         public static Predicate<ObjectAction> notBulkOnly() {
             return org.apache.isis.applib.filter.Filters.asPredicate(Filters.notBulkOnly());
         }
@@ -307,9 +305,9 @@ public interface ObjectAction extends ObjectMember {
         }
     }
 
-    // //////////////////////////////////////////////////////
-    // Filters
-    // //////////////////////////////////////////////////////
+    //endregion
+
+    //region > Filters
 
     public static final class Filters {
 
@@ -320,12 +318,14 @@ public interface ObjectAction extends ObjectMember {
          * @deprecated -use {@link com.google.common.base.Predicate equivalent}
          */
         @Deprecated
-        public static Filter<ObjectAction> dynamicallyVisible(final AuthenticationSession session,
-                final ObjectAdapter target, final Where where) {
+        public static Filter<ObjectAction> dynamicallyVisible(
+                final ObjectAdapter target,
+                final InteractionInitiatedBy interactionInitiatedBy,
+                final Where where) {
             return new Filter<ObjectAction>() {
                 @Override
                 public boolean accept(final ObjectAction objectAction) {
-                    final Consent visible = objectAction.isVisible(session, target, where);
+                    final Consent visible = objectAction.isVisible(target, interactionInitiatedBy, where);
                     return visible.isAllowed();
                 }
             };
@@ -381,7 +381,9 @@ public interface ObjectAction extends ObjectMember {
 
                 @Override
                 public boolean accept(ObjectAction oa) {
-                    if (!oa.containsDoOpFacet(BulkFacet.class)) {
+
+                    final BulkFacet bulkFacet = oa.getFacet(BulkFacet.class);
+                    if(bulkFacet == null || bulkFacet.isNoop() || bulkFacet.value() == Bulk.AppliesTo.REGULAR_ONLY) {
                         return false;
                     }
                     if (oa.getParameterCount() != 0) {
@@ -457,9 +459,9 @@ public interface ObjectAction extends ObjectMember {
 
             final List<ObjectAssociation> associations = adapterSpec.getAssociations(Contributed.INCLUDED);
             final List<String> associationNames = Lists.transform(associations,
-                    Functions.compose(StringFunctions.toLowerCase(), ObjectAssociation.Functions.toName()));
+                    com.google.common.base.Functions.compose(StringFunctions.toLowerCase(), ObjectAssociation.Functions.toName()));
             final List<String> associationIds = Lists.transform(associations,
-                    Functions.compose(StringFunctions.toLowerCase(), ObjectAssociation.Functions.toId()));
+                    com.google.common.base.Functions.compose(StringFunctions.toLowerCase(), ObjectAssociation.Functions.toId()));
 
             return new Filter<ObjectAction>() {
 
@@ -478,4 +480,7 @@ public interface ObjectAction extends ObjectMember {
             };
         }
     }
+
+    //endregion
+
 }

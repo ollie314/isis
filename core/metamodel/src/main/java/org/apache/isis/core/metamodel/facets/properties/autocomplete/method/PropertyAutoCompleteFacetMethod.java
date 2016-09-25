@@ -23,16 +23,23 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.isis.core.commons.lang.ObjectExtensions;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+
+import org.apache.isis.core.commons.authentication.AuthenticationSession;
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
+import org.apache.isis.core.metamodel.facets.CollectionUtils;
+import org.apache.isis.core.metamodel.facets.FacetedMethod;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
+import org.apache.isis.core.metamodel.facets.param.autocomplete.MinLengthUtil;
 import org.apache.isis.core.metamodel.facets.properties.autocomplete.PropertyAutoCompleteFacetAbstract;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
-import org.apache.isis.core.metamodel.facets.CollectionUtils;
-import org.apache.isis.core.metamodel.facets.param.autocomplete.MinLengthUtil;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
 public class PropertyAutoCompleteFacetMethod extends PropertyAutoCompleteFacetAbstract implements ImperativeFacet {
 
@@ -40,14 +47,25 @@ public class PropertyAutoCompleteFacetMethod extends PropertyAutoCompleteFacetAb
     private final Class<?> choicesClass;
     private final int minLength;
 
+    private final AuthenticationSessionProvider authenticationSessionProvider;
     private final AdapterManager adapterManager;
-    private SpecificationLoader specificationLookup;
+    private final DeploymentCategory deploymentCategory;
+    private SpecificationLoader specificationLoader;
 
-    public PropertyAutoCompleteFacetMethod(final Method method, final Class<?> choicesClass, final FacetHolder holder, final SpecificationLoader specificationLookup, final AdapterManager adapterManager) {
+    public PropertyAutoCompleteFacetMethod(
+            final Method method,
+            final Class<?> choicesClass,
+            final FacetHolder holder,
+            final DeploymentCategory deploymentCategory,
+            final SpecificationLoader specificationLoader,
+            final AuthenticationSessionProvider authenticationSessionProvider,
+            final AdapterManager adapterManager) {
         super(holder);
         this.method = method;
         this.choicesClass = choicesClass;
-        this.specificationLookup = specificationLookup;
+        this.deploymentCategory = deploymentCategory;
+        this.specificationLoader = specificationLoader;
+        this.authenticationSessionProvider = authenticationSessionProvider;
         this.adapterManager = adapterManager;
         this.minLength = MinLengthUtil.determineMinLength(method);
     }
@@ -72,31 +90,46 @@ public class PropertyAutoCompleteFacetMethod extends PropertyAutoCompleteFacetAb
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
+    public Object[] autoComplete(
+            final ObjectAdapter owningAdapter,
+            final String searchArg,
+            final InteractionInitiatedBy interactionInitiatedBy) {
 
-    @Override
-    public boolean impliesObjectChanged() {
-        return false;
-    }
+        final AuthenticationSession authenticationSession = getAuthenticationSession();
+        final DeploymentCategory deploymentCategory = getDeploymentCategory();
 
-    @Override
-    public Object[] autoComplete(ObjectAdapter owningAdapter, String searchArg) {
-        final Object options = ObjectAdapter.InvokeUtils.invoke(method, owningAdapter, searchArg);
-        if (options == null) {
+
+        final Object collectionOrArray = ObjectAdapter.InvokeUtils.invoke(method, owningAdapter, searchArg);
+        if (collectionOrArray == null) {
             return null;
         }
-        if (options.getClass().isArray()) {
-            return ObjectExtensions.asArray(options);
-        }
-        final ObjectSpecification specification = specificationLookup.loadSpecification(choicesClass);
-        return CollectionUtils.getCollectionAsObjectArray(options, specification, getAdapterManager());
+
+        final ObjectAdapter collectionAdapter = getAdapterManager().adapterFor(collectionOrArray);
+
+        final FacetedMethod facetedMethod = (FacetedMethod) getFacetHolder();
+        final Class<?> propertyType = facetedMethod.getType();
+
+        final List<ObjectAdapter> visibleAdapters =
+                ObjectAdapter.Util.visibleAdapters(
+                        collectionAdapter,
+                        interactionInitiatedBy);
+        final List<Object> filteredObjects = Lists.newArrayList(
+                Iterables.transform(visibleAdapters, ObjectAdapter.Functions.getObject()));
+
+        final ObjectSpecification propertySpec = getSpecification(propertyType);
+        return CollectionUtils.getCollectionAsObjectArray(filteredObjects, propertySpec, getAdapterManager());
     }
 
     @Override
     protected String toStringValues() {
         return "method=" + method + ",class=" + choicesClass;
+    }
+
+
+
+
+    protected ObjectSpecification getSpecification(final Class<?> type) {
+        return type != null ? getSpecificationLoader().loadSpecification(type) : null;
     }
 
     // ////////////////////////////////////////////
@@ -107,5 +140,15 @@ public class PropertyAutoCompleteFacetMethod extends PropertyAutoCompleteFacetAb
         return adapterManager;
     }
 
+    protected SpecificationLoader getSpecificationLoader() {
+        return specificationLoader;
+    }
 
+    protected DeploymentCategory getDeploymentCategory() {
+        return deploymentCategory;
+    }
+
+    protected AuthenticationSession getAuthenticationSession() {
+        return authenticationSessionProvider.getAuthenticationSession();
+    }
 }

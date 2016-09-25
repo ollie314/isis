@@ -23,16 +23,22 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.isis.core.commons.lang.ObjectExtensions;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
+import org.apache.isis.core.metamodel.facets.CollectionUtils;
+import org.apache.isis.core.metamodel.facets.FacetedMethodParameter;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
 import org.apache.isis.core.metamodel.facets.param.autocomplete.ActionParameterAutoCompleteFacetAbstract;
 import org.apache.isis.core.metamodel.facets.param.autocomplete.MinLengthUtil;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
-import org.apache.isis.core.metamodel.facets.CollectionUtils;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
 public class ActionParameterAutoCompleteFacetViaMethod extends ActionParameterAutoCompleteFacetAbstract implements ImperativeFacet {
 
@@ -40,8 +46,15 @@ public class ActionParameterAutoCompleteFacetViaMethod extends ActionParameterAu
     private final Class<?> choicesType;
     private final int minLength;
 
-    public ActionParameterAutoCompleteFacetViaMethod(final Method method, final Class<?> choicesType, final FacetHolder holder, final SpecificationLoader specificationLookup, final AdapterManager adapterManager) {
-        super(holder, specificationLookup, adapterManager);
+    public ActionParameterAutoCompleteFacetViaMethod(
+            final Method method,
+            final Class<?> choicesType,
+            final FacetHolder holder,
+            final DeploymentCategory deploymentCategory,
+            final SpecificationLoader specificationLookup,
+            final AuthenticationSessionProvider authenticationSessionProvider,
+            final AdapterManager adapterManager) {
+        super(holder, deploymentCategory, specificationLookup, authenticationSessionProvider, adapterManager);
         this.method = method;
         this.choicesType = choicesType;
         this.minLength = MinLengthUtil.determineMinLength(method);
@@ -67,27 +80,29 @@ public class ActionParameterAutoCompleteFacetViaMethod extends ActionParameterAu
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
+    public Object[] autoComplete(
+            final ObjectAdapter owningAdapter,
+            final String searchArg,
+            final InteractionInitiatedBy interactionInitiatedBy) {
 
-    @Override
-    public boolean impliesObjectChanged() {
-        return false;
-    }
-
-    @Override
-    public Object[] autoComplete(ObjectAdapter owningAdapter, String searchArg) {
-        final Object options = ObjectAdapter.InvokeUtils.invoke(method, owningAdapter, searchArg);
-        if (options == null) {
+        final Object collectionOrArray = ObjectAdapter.InvokeUtils.invoke(method, owningAdapter, searchArg);
+        if (collectionOrArray == null) {
             return new Object[0];
         }
-        if (options.getClass().isArray()) {
-            return ObjectExtensions.asArray(options);
-        } else {
-            final ObjectSpecification specification = getSpecification(choicesType);
-            return CollectionUtils.getCollectionAsObjectArray(options, specification, getAdapterManager());
-        }
+        final ObjectAdapter collectionAdapter = getAdapterManager().adapterFor(collectionOrArray);
+
+        final FacetedMethodParameter facetedMethodParameter = (FacetedMethodParameter) getFacetHolder();
+        final Class<?> parameterType = facetedMethodParameter.getType();
+
+        final List<ObjectAdapter> visibleAdapters =
+                ObjectAdapter.Util.visibleAdapters(
+                        collectionAdapter,
+                        interactionInitiatedBy);
+        final List<Object> visibleObjects = Lists.newArrayList(
+                Iterables.transform(visibleAdapters, ObjectAdapter.Functions.getObject()));
+
+        final ObjectSpecification parameterSpec = getSpecification(parameterType);
+        return CollectionUtils.getCollectionAsObjectArray(visibleObjects, parameterSpec, getAdapterManager());
     }
 
     @Override

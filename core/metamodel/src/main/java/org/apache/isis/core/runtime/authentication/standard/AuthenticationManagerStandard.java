@@ -19,10 +19,6 @@
 
 package org.apache.isis.core.runtime.authentication.standard;
 
-import static org.apache.isis.core.commons.ensure.Ensure.ensureThatArg;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -32,32 +28,24 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import org.apache.isis.applib.annotation.Programmatic;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.debug.DebugBuilder;
-import org.apache.isis.core.commons.debug.DebuggableWithTitle;
 import org.apache.isis.core.commons.exceptions.IsisException;
 import org.apache.isis.core.commons.util.ToString;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.runtime.authentication.AuthenticationManager;
 import org.apache.isis.core.runtime.authentication.AuthenticationRequest;
 import org.apache.isis.core.runtime.authentication.RegistrationDetails;
 
-public class AuthenticationManagerStandard implements AuthenticationManager, DebuggableWithTitle {
+public class AuthenticationManagerStandard implements AuthenticationManager {
 
     private final Map<String, String> userByValidationCode = Maps.newHashMap();
 
-    /**
-     * Not final because may be set {@link #setAuthenticators(List)
-     * programmatically}.
-     */
-    private List<Authenticator> authenticators = Lists.newArrayList();
+    private final List<Authenticator> authenticators = Lists.newArrayList();
 
     private RandomCodeGenerator randomCodeGenerator;
     private final IsisConfiguration configuration;
-
-    // //////////////////////////////////////////////////////////
-    // constructor
-    // //////////////////////////////////////////////////////////
 
     public AuthenticationManagerStandard(final IsisConfiguration configuration) {
         this.configuration = configuration;
@@ -70,18 +58,18 @@ public class AuthenticationManagerStandard implements AuthenticationManager, Deb
     /**
      * Will default the {@link #setRandomCodeGenerator(RandomCodeGenerator)
      * RandomCodeGenerator}, but {@link Authenticator}(s) must have been
-     * {@link #addAuthenticator(Authenticator) added} or
-     * {@link #setAuthenticators(List) injected}.
+     * {@link #addAuthenticator(Authenticator) added}.
+     * @param deploymentCategory
      */
-    @Override
-    public final void init() {
+    @Programmatic
+    public final void init(final DeploymentCategory deploymentCategory) {
         defaultRandomCodeGeneratorIfNecessary();
         addDefaultAuthenticators();
         if (authenticators.size() == 0) {
             throw new IsisException("No authenticators specified");
         }
         for (final Authenticator authenticator : authenticators) {
-            authenticator.init();
+            authenticator.init(deploymentCategory);
         }
     }
 
@@ -97,7 +85,7 @@ public class AuthenticationManagerStandard implements AuthenticationManager, Deb
     protected void addDefaultAuthenticators() {
     }
 
-    @Override
+    @Programmatic
     public void shutdown() {
         for (final Authenticator authenticator : authenticators) {
             authenticator.shutdown();
@@ -108,6 +96,7 @@ public class AuthenticationManagerStandard implements AuthenticationManager, Deb
     // Session Management (including authenticate)
     // //////////////////////////////////////////////////////////
 
+    @Programmatic
     @Override
     public synchronized final AuthenticationSession authenticate(final AuthenticationRequest request) {
         if (request == null) {
@@ -137,14 +126,20 @@ public class AuthenticationManagerStandard implements AuthenticationManager, Deb
         return code;
     }
 
+    @Programmatic
     @Override
     public final boolean isSessionValid(final AuthenticationSession session) {
         final String userName = userByValidationCode.get(session.getValidationCode());
         return session.hasUserNameOf(userName);
     }
 
+    @Programmatic
     @Override
     public void closeSession(final AuthenticationSession session) {
+        List<Authenticator> authenticators = getAuthenticators();
+        for (Authenticator authenticator : authenticators) {
+            authenticator.logout(session);
+        }
         userByValidationCode.remove(session.getValidationCode());
     }
 
@@ -152,43 +147,23 @@ public class AuthenticationManagerStandard implements AuthenticationManager, Deb
     // Authenticators
     // //////////////////////////////////////////////////////////
 
-    /**
-     * Adds an {@link Authenticator}.
-     * 
-     * <p>
-     * Use either this or alternatively {@link #setAuthenticators(List) inject}
-     * the full list of {@link Authenticator}s.
-     */
+    @Programmatic
     public final void addAuthenticator(final Authenticator authenticator) {
         authenticators.add(authenticator);
     }
 
-    /**
-     * Adds an {@link Authenticator} to the start of the list (not API).
-     */
-    protected void addAuthenticatorToStart(final Authenticator authenticator) {
+    @Programmatic
+    public void addAuthenticatorToStart(final Authenticator authenticator) {
         authenticators.add(0, authenticator);
     }
 
-    /**
-     * Provide direct injection.
-     * 
-     * <p>
-     * Use either this or programmatically
-     * {@link #addAuthenticator(Authenticator)}.
-     */
-    public void setAuthenticators(final List<Authenticator> authenticators) {
-        this.authenticators = authenticators;
-    }
-
+    @Programmatic
     public List<Authenticator> getAuthenticators() {
         return Collections.unmodifiableList(authenticators);
     }
 
-    // //////////////////////////////////////////////////////////
-    // register
-    // //////////////////////////////////////////////////////////
 
+    @Programmatic
     @Override
     public boolean register(final RegistrationDetails registrationDetails) {
         for (final Registrar registrar : getRegistrars()) {
@@ -199,6 +174,7 @@ public class AuthenticationManagerStandard implements AuthenticationManager, Deb
         return false;
     }
 
+    @Programmatic
     @Override
     public boolean supportsRegistration(final Class<? extends RegistrationDetails> registrationDetailsClass) {
         for (final Registrar registrar : getRegistrars()) {
@@ -209,6 +185,7 @@ public class AuthenticationManagerStandard implements AuthenticationManager, Deb
         return false;
     }
 
+    @Programmatic
     public List<Registrar> getRegistrars() {
         return asAuthenticators(getAuthenticators());
     }
@@ -222,43 +199,20 @@ public class AuthenticationManagerStandard implements AuthenticationManager, Deb
     // RandomCodeGenerator
     // //////////////////////////////////////////////////////////
 
-    /**
-     * The {@link RandomCodeGenerator} in use.
-     */
-    public RandomCodeGenerator getRandomCodeGenerator() {
-        return randomCodeGenerator;
-    }
 
     /**
      * For injection; will {@link #defaultRandomCodeGeneratorIfNecessary()
      * default} otherwise.
      */
+    @Programmatic
     public void setRandomCodeGenerator(final RandomCodeGenerator randomCodeGenerator) {
-        ensureThatArg(randomCodeGenerator, is(notNullValue()), "randomCodeGenerator cannot be null");
+        assert randomCodeGenerator != null;
         this.randomCodeGenerator = randomCodeGenerator;
     }
 
     // //////////////////////////////////////////////////////////
     // Debugging
     // //////////////////////////////////////////////////////////
-
-    @Override
-    public String debugTitle() {
-        return "Authentication Manager";
-    }
-
-    @Override
-    public void debugData(final DebugBuilder debug) {
-        debug.appendTitle("Authenticators");
-        for (final Authenticator authenticator : authenticators) {
-            debug.appendln(authenticator.toString());
-        }
-
-        debug.appendTitle("Users");
-        for (final String userName : userByValidationCode.values()) {
-            debug.appendln(userName);
-        }
-    }
 
     @Override
     public String toString() {

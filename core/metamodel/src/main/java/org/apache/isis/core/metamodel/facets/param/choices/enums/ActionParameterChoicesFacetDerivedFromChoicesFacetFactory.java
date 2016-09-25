@@ -19,18 +19,16 @@
 
 package org.apache.isis.core.metamodel.facets.param.choices.enums;
 
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManagerAware;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
 import org.apache.isis.core.metamodel.facets.FacetedMethodParameter;
 import org.apache.isis.core.metamodel.facets.objectvalue.choices.ChoicesFacet;
 import org.apache.isis.core.metamodel.facets.param.choices.ActionParameterChoicesFacet;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 
-public class ActionParameterChoicesFacetDerivedFromChoicesFacetFactory extends FacetFactoryAbstract implements AdapterManagerAware {
-
-    private AdapterManager adapterManager;
+public class ActionParameterChoicesFacetDerivedFromChoicesFacetFactory extends FacetFactoryAbstract {
 
     public ActionParameterChoicesFacetDerivedFromChoicesFacetFactory() {
         super(FeatureType.PARAMETERS_ONLY);
@@ -50,19 +48,23 @@ public class ActionParameterChoicesFacetDerivedFromChoicesFacetFactory extends F
             return;
         }
         
-        FacetUtil.addFacet(new ActionParameterChoicesFacetDerivedFromChoicesFacet(facetHolder, getSpecificationLoader(), getAdapterManager()));
+        FacetUtil.addFacet(new ActionParameterChoicesFacetDerivedFromChoicesFacet(
+                facetHolder,
+                getDeploymentCategory(), getSpecificationLoader(),
+                getAuthenticationSessionProvider(),
+                adapterManager));
     }
 
     // /////////////////////////////////////////////
     // Injected
     // /////////////////////////////////////////////
 
-    protected AdapterManager getAdapterManager() {
-        return adapterManager;
+    @Override
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        adapterManager = servicesInjector.getPersistenceSessionServiceInternal();
     }
 
-    @Override
-    public void setAdapterManager(final AdapterManager adapterManager) {
-        this.adapterManager = adapterManager;
-    }
+    PersistenceSessionServiceInternal adapterManager;
+
 }

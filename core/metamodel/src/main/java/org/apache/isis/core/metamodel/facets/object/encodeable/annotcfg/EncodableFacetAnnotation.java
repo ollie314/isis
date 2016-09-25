@@ -27,7 +27,7 @@ import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.object.encodeable.EncodableFacetAbstract;
 import org.apache.isis.core.metamodel.facets.object.encodeable.EncoderDecoderUtil;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 
 public class EncodableFacetAnnotation extends EncodableFacetAbstract {
 
@@ -45,8 +45,8 @@ public class EncodableFacetAnnotation extends EncodableFacetAbstract {
         return annotation.encoderDecoderClass();
     }
 
-    public EncodableFacetAnnotation(final Class<?> annotatedClass, final IsisConfiguration configuration, final FacetHolder holder, final AdapterManager adapterManager, final ServicesInjector dependencyInjector) {
-        this(encoderDecoderName(annotatedClass, configuration), encoderDecoderClass(annotatedClass), holder, adapterManager, dependencyInjector);
+    public EncodableFacetAnnotation(final Class<?> annotatedClass, final FacetHolder holder, final ServicesInjector servicesInjector) {
+        this(encoderDecoderName(annotatedClass, servicesInjector.getConfigurationServiceInternal()), encoderDecoderClass(annotatedClass), holder, servicesInjector.getPersistenceSessionServiceInternal(), servicesInjector);
     }
 
     private EncodableFacetAnnotation(final String candidateEncoderDecoderName, final Class<?> candidateEncoderDecoderClass, final FacetHolder holder, final AdapterManager adapterManager, final ServicesInjector dependencyInjector) {

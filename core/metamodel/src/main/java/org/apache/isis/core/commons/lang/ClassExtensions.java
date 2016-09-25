@@ -20,26 +20,20 @@
 package org.apache.isis.core.commons.lang;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
 
-import com.google.common.io.InputSupplier;
+import com.google.common.io.ByteSource;
 import com.google.common.io.Resources;
 
 import org.apache.isis.core.commons.exceptions.IsisException;
-import org.apache.isis.core.metamodel.methodutils.MethodFinderUtils;
 
 public final class ClassExtensions {
-
-
 
 
     // //////////////////////////////////////
@@ -161,9 +155,9 @@ public final class ClassExtensions {
     public static Properties resourceProperties(final Class<?> extendee, final String suffix) {
         try {
             final URL url = Resources.getResource(extendee, extendee.getSimpleName()+suffix);
-            final InputSupplier<InputStream> inputSupplier = com.google.common.io.Resources.newInputStreamSupplier(url);
+            final ByteSource byteSource = Resources.asByteSource(url);
             final Properties properties = new Properties();
-            properties.load(inputSupplier.getInput());
+            properties.load(byteSource.openStream());
             return properties;
         } catch (Exception e) {
             return null;
@@ -171,8 +165,18 @@ public final class ClassExtensions {
     }
 
     public static String resourceContent(final Class<?> cls, final String suffix) throws IOException {
-        final URL url = Resources.getResource(cls, cls.getSimpleName()+suffix);
+        final String resourceName = cls.getSimpleName() + suffix;
+        return resourceContentOf(cls, resourceName);
+    }
+
+    public static String resourceContentOf(final Class<?> cls, final String resourceName) throws IOException {
+        final URL url = Resources.getResource(cls, resourceName);
         return Resources.toString(url, Charset.defaultCharset());
+    }
+
+    public static boolean exists(final Class<?> cls, final String resourceName) {
+        final URL url = Resources.getResource(cls, resourceName);
+        return url != null;
     }
 
     public static Class<?> asWrapped(final Class<?> primitiveClassExtendee) {

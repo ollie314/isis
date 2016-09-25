@@ -29,26 +29,26 @@ import com.google.common.collect.Lists;
 
 import org.apache.isis.applib.annotation.Title;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManagerAware;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facetapi.MetaModelValidatorRefiner;
+import org.apache.isis.core.metamodel.facets.Annotations;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
+import org.apache.isis.core.metamodel.facets.MethodFinderUtils;
+import org.apache.isis.core.metamodel.facets.fallback.FallbackFacetFactory;
 import org.apache.isis.core.metamodel.methodutils.MethodScope;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorVisiting;
 import org.apache.isis.core.metamodel.specloader.validator.ValidationFailures;
-import org.apache.isis.core.metamodel.facets.MethodFinderUtils;
-import org.apache.isis.core.metamodel.facets.fallback.FallbackFacetFactory;
 
-public class TitleAnnotationFacetFactory extends FacetFactoryAbstract implements AdapterManagerAware, MetaModelValidatorRefiner {
+public class TitleAnnotationFacetFactory extends FacetFactoryAbstract implements MetaModelValidatorRefiner {
 
     private static final String TITLE_METHOD_NAME = "title";
 
-    private AdapterManager adapterManager;
 
     public TitleAnnotationFacetFactory() {
         super(FeatureType.OBJECTS_ONLY);
@@ -63,27 +63,28 @@ public class TitleAnnotationFacetFactory extends FacetFactoryAbstract implements
         final Class<?> cls = processClassContext.getCls();
         final FacetHolder facetHolder = processClassContext.getFacetHolder();
 
-        final List<Method> methods = MethodFinderUtils.findMethodsWithAnnotation(cls, MethodScope.OBJECT, Title.class);
-
-        Collections.sort(methods, new Comparator<Method>() {
-            Comparator<String> comparator = new SequenceComparator();
-
-            @Override
-            public int compare(final Method o1, final Method o2) {
-                final Title a1 = o1.getAnnotation(Title.class);
-                final Title a2 = o2.getAnnotation(Title.class);
-                return comparator.compare(a1.sequence(), a2.sequence());
-            }
-        });
-        if (methods.isEmpty()) {
+        final List<Annotations.Evaluator<Title>> evaluators = Annotations.getEvaluators(cls, Title.class);
+        if (evaluators.isEmpty()) {
             return;
         }
-        final List<TitleFacetViaTitleAnnotation.TitleComponent> titleComponents = Lists.transform(methods, TitleFacetViaTitleAnnotation.TitleComponent.FROM_METHOD);
+
+        sort(evaluators);
+        final List<TitleFacetViaTitleAnnotation.TitleComponent> titleComponents = Lists.transform(evaluators, TitleFacetViaTitleAnnotation.TitleComponent.FROM_EVALUATORS);
         FacetUtil.addFacet(new TitleFacetViaTitleAnnotation(titleComponents, facetHolder, adapterManager));
     }
 
+    public static void sort(final List<Annotations.Evaluator<Title>> evaluators) {
+        Collections.sort(evaluators, new Comparator<Annotations.Evaluator<Title>>() {
+            Comparator<String> comparator = new SequenceComparator();
 
-
+            @Override
+            public int compare(final Annotations.Evaluator<Title> o1, final Annotations.Evaluator<Title> o2) {
+                final Title a1 = o1.getAnnotation();
+                final Title a2 = o2.getAnnotation();
+                return comparator.compare(a1.sequence(), a2.sequence());
+            }
+        });
+    }
 
     static class SequenceComparator implements Comparator<String> {
 
@@ -140,11 +141,6 @@ public class TitleAnnotationFacetFactory extends FacetFactoryAbstract implements
     }
 
 
-    @Override
-    public void setAdapterManager(final AdapterManager adapterMap) {
-        this.adapterManager = adapterMap;
-    }
-
     /**
      * Violation if there is a class that has both a <tt>title()</tt> method and also any non-inherited method 
      * annotated with <tt>@Title</tt>.
@@ -192,4 +188,14 @@ public class TitleAnnotationFacetFactory extends FacetFactoryAbstract implements
 
         }));
     }
+
+
+    @Override
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        adapterManager = servicesInjector.getPersistenceSessionServiceInternal();
+    }
+
+    PersistenceSessionServiceInternal adapterManager;
+
 }

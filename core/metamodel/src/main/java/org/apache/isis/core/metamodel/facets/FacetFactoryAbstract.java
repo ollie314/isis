@@ -23,15 +23,18 @@ import java.util.List;
 
 import com.google.common.collect.ImmutableList;
 
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
+import org.apache.isis.core.commons.config.IsisConfiguration;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderAware;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjectorAware;
+import org.apache.isis.core.metamodel.services.configinternal.ConfigurationServiceInternal;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
-public abstract class FacetFactoryAbstract implements FacetFactory, SpecificationLoaderAware {
+public abstract class FacetFactoryAbstract implements FacetFactory, ServicesInjectorAware {
 
     private final List<FeatureType> featureTypes;
-
-    private SpecificationLoader specificationLoader;
 
     public FacetFactoryAbstract(final List<FeatureType> featureTypes) {
         this.featureTypes = ImmutableList.copyOf(featureTypes);
@@ -54,20 +57,37 @@ public abstract class FacetFactoryAbstract implements FacetFactory, Specificatio
     public void processParams(final ProcessParameterContext processParameterContext) {
     }
 
-    // ////////////////////////////////////////////////////////////////
-    // Dependencies (injected)
-    // ////////////////////////////////////////////////////////////////
+    //region > dependencies (injected)
+
+    protected ServicesInjector servicesInjector;
+
+    @Override
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        this.servicesInjector = servicesInjector;
+    }
+    //endregion
+
+    //region > dependencies (looked up from services injector)
 
     protected SpecificationLoader getSpecificationLoader() {
-        return specificationLoader;
+        return servicesInjector.getSpecificationLoader();
     }
 
-    /**
-     * Injected
-     */
-    @Override
-    public void setSpecificationLookup(final SpecificationLoader specificationLookup) {
-        this.specificationLoader = specificationLookup;
+    protected AuthenticationSessionProvider getAuthenticationSessionProvider() {
+        return servicesInjector.getAuthenticationSessionProvider();
     }
+
+    protected DeploymentCategory getDeploymentCategory() {
+        return servicesInjector.getDeploymentCategoryProvider().getDeploymentCategory();
+    }
+
+    protected IsisConfiguration getConfiguration() {
+        final ConfigurationServiceInternal configurationServiceInternal = servicesInjector
+                .getConfigurationServiceInternal();
+        return configurationServiceInternal;
+    }
+
+    //endregion
+
 
 }

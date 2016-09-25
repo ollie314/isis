@@ -27,7 +27,8 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 
-import org.apache.isis.core.commons.config.IsisConfigurationBuilder;
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
+import org.apache.isis.core.commons.configbuilder.IsisConfigurationBuilder;
 import org.apache.isis.core.commons.config.NotFoundPolicy;
 import org.apache.isis.core.runtime.optionhandler.BootPrinter;
 import org.apache.isis.core.runtime.optionhandler.OptionHandlerAbstract;
@@ -51,11 +52,11 @@ public class OptionHandlerConfiguration extends OptionHandlerAbstract {
     }
 
     @Override
-    public void primeConfigurationBuilder(final IsisConfigurationBuilder isisConfigurationBuilder) {
+    public void prime(final IsisConfigurationBuilder isisConfigurationBuilder) {
         if (configurationResource == null) {
             return;
         }
-        isisConfigurationBuilder.addConfigurationResource(configurationResource, NotFoundPolicy.FAIL_FAST);
+        isisConfigurationBuilder.addConfigurationResource(configurationResource, NotFoundPolicy.FAIL_FAST, IsisConfigurationDefault.ContainsPolicy.IGNORE);
     }
 
 }

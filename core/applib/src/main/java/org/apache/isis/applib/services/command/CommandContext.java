@@ -52,7 +52,7 @@ public class CommandContext {
      * <b>NOT API</b>: intended to be called only by the framework.
      */
     @Programmatic
-    public void setCommand(Command command) {
+    public void setCommand(final Command command) {
         this.command = command;
     }
 

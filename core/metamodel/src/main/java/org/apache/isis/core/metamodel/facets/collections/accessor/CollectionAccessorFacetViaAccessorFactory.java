@@ -20,18 +20,21 @@
 package org.apache.isis.core.metamodel.facets.collections.accessor;
 
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.List;
 
-import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facetapi.MethodRemover;
-import org.apache.isis.core.metamodel.methodutils.MethodScope;
 import org.apache.isis.core.metamodel.facets.MethodPrefixConstants;
 import org.apache.isis.core.metamodel.facets.PropertyOrCollectionIdentifyingFacetFactoryAbstract;
+import org.apache.isis.core.metamodel.methodutils.MethodScope;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 
-public class CollectionAccessorFacetViaAccessorFactory extends PropertyOrCollectionIdentifyingFacetFactoryAbstract {
+public class CollectionAccessorFacetViaAccessorFactory
+        extends PropertyOrCollectionIdentifyingFacetFactoryAbstract {
 
     private static final String[] PREFIXES = { MethodPrefixConstants.GET_PREFIX };
 
@@ -41,7 +44,6 @@ public class CollectionAccessorFacetViaAccessorFactory extends PropertyOrCollect
 
     @Override
     public void process(final ProcessMethodContext processMethodContext) {
-
         attachAccessorFacetForAccessorMethod(processMethodContext);
     }
 
@@ -50,9 +52,14 @@ public class CollectionAccessorFacetViaAccessorFactory extends PropertyOrCollect
         processMethodContext.removeMethod(accessorMethod);
 
         final FacetHolder holder = processMethodContext.getFacetHolder();
-        final Facet facet = new CollectionAccessorFacetViaAccessor(accessorMethod, holder);
-        FacetUtil.addFacet(facet);
+        FacetUtil.addFacet(
+                new CollectionAccessorFacetViaAccessor(
+                        accessorMethod, holder,
+                        getDeploymentCategory(), getConfiguration(), getSpecificationLoader(),
+                        getAuthenticationSessionProvider(), adapterManager
+                ));
     }
+
 
     // ///////////////////////////////////////////////////////////////
     // PropertyOrCollectionIdentifyingFacetFactory impl.
@@ -82,17 +89,28 @@ public class CollectionAccessorFacetViaAccessorFactory extends PropertyOrCollect
     }
 
     @Override
-    public void findAndRemoveCollectionAccessors(final MethodRemover methodRemover, final List<Method> methodListToAppendTo) {
-        final Class<?>[] collectionClasses = getCollectionTypeRepository().getCollectionType();
-        for (final Class<?> returnType : collectionClasses) {
-            final List<Method> list = methodRemover.removeMethods(MethodScope.OBJECT, MethodPrefixConstants.GET_PREFIX, returnType, false, 0);
-            methodListToAppendTo.addAll(list);
-        }
+    public void findAndRemoveCollectionAccessors(
+            final MethodRemover methodRemover,
+            final List<Method> methodListToAppendTo) {
+
+        final List<Method> list =
+                methodRemover.removeMethods(MethodScope.OBJECT, MethodPrefixConstants.GET_PREFIX,
+                Collection.class, false, 0);
+        methodListToAppendTo.addAll(list);
     }
 
     @Override
     public void findAndRemovePropertyAccessors(final MethodRemover methodRemover, final List<Method> methodListToAppendTo) {
         // does nothing
     }
+
+
+
+    @Override public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        adapterManager = servicesInjector.getPersistenceSessionServiceInternal();
+    }
+
+    PersistenceSessionServiceInternal adapterManager;
 
 }

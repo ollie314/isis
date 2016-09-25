@@ -20,46 +20,42 @@ import java.util.List;
 
 import org.apache.isis.core.commons.lang.ListExtensions;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.spec.feature.ObjectActionParameter;
 
-public class OneToOneActionParameterContributee extends OneToOneActionParameterImpl implements ObjectActionParameterContributee{
+public class OneToOneActionParameterContributee extends OneToOneActionParameterDefault implements ObjectActionParameterContributee{
 
     private final ObjectAdapter serviceAdapter;
-    @SuppressWarnings("unused")
-    private final ObjectActionImpl serviceAction;
     private final ObjectActionParameter serviceActionParameter;
-    @SuppressWarnings("unused")
-    private final int serviceParamNumber;
-    @SuppressWarnings("unused")
-    private final int contributeeParamNumber;
     private final ObjectActionContributee contributeeAction;
 
     public OneToOneActionParameterContributee(
             final ObjectAdapter serviceAdapter,
-            final ObjectActionImpl serviceAction,
             final ObjectActionParameterAbstract serviceActionParameter,
-            final int serviceParamNumber,
             final int contributeeParamNumber,
             final ObjectActionContributee contributeeAction) {
         super(contributeeParamNumber, contributeeAction, serviceActionParameter.getPeer());
         this.serviceAdapter = serviceAdapter;
-        this.serviceAction = serviceAction;
         this.serviceActionParameter = serviceActionParameter;
-        this.serviceParamNumber = serviceParamNumber;
-        this.contributeeParamNumber = contributeeParamNumber;
         this.contributeeAction = contributeeAction;
     }
 
     @Override
-    public ObjectAdapter[] getAutoComplete(ObjectAdapter adapter, String searchArg) {
-        return serviceActionParameter.getAutoComplete(serviceAdapter, searchArg);
+    public ObjectAdapter[] getAutoComplete(
+            final ObjectAdapter adapter,
+            final String searchArg,
+            final InteractionInitiatedBy interactionInitiatedBy) {
+        return serviceActionParameter.getAutoComplete(serviceAdapter, searchArg,
+                interactionInitiatedBy);
     }
 
-    protected ObjectAdapter targetForDefaultOrChoices(ObjectAdapter adapter, final List<ObjectAdapter> argumentsIfAvailable) {
+    protected ObjectAdapter targetForDefaultOrChoices(final ObjectAdapter adapter) {
         return serviceAdapter;
     }
 
-    protected List<ObjectAdapter> argsForDefaultOrChoices(final ObjectAdapter contributee, final List<ObjectAdapter> argumentsIfAvailable) {
+    protected List<ObjectAdapter> argsForDefaultOrChoices(
+            final ObjectAdapter contributee,
+            final List<ObjectAdapter> argumentsIfAvailable) {
 
         final List<ObjectAdapter> suppliedArgs = ListExtensions.mutableCopy(argumentsIfAvailable);
         

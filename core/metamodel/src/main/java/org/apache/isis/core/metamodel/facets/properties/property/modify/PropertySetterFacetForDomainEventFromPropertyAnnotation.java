@@ -23,10 +23,11 @@ import org.apache.isis.applib.services.eventbus.PropertyDomainEvent;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.propcoll.accessor.PropertyOrCollectionAccessorFacet;
 import org.apache.isis.core.metamodel.facets.properties.update.modify.PropertySetterFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 
 public class PropertySetterFacetForDomainEventFromPropertyAnnotation
-        extends PropertySetterFacetForDomainEventAbstract {
+        extends PropertySetterOrClearFacetForDomainEventAbstract
+        implements PropertySetterFacet {
 
 
     public PropertySetterFacetForDomainEventFromPropertyAnnotation(
@@ -34,7 +35,8 @@ public class PropertySetterFacetForDomainEventFromPropertyAnnotation
             final PropertyOrCollectionAccessorFacet getterFacet,
             final PropertySetterFacet setterFacet,
             final PropertyDomainEventFacetAbstract propertyInteractionFacet,
-            final FacetHolder holder, final ServicesInjector servicesInjector) {
-        super(eventType, getterFacet, setterFacet, propertyInteractionFacet, servicesInjector, holder);
+            final FacetHolder holder,
+            final ServicesInjector servicesInjector) {
+        super(PropertySetterFacet.class, eventType, getterFacet, setterFacet, null, propertyInteractionFacet, servicesInjector, holder);
     }
 }

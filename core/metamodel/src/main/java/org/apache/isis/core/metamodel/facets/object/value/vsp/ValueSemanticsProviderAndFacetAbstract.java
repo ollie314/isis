@@ -23,17 +23,15 @@ import java.text.DecimalFormat;
 import java.text.Format;
 import java.text.NumberFormat;
 import java.util.Locale;
+
 import org.apache.isis.applib.adapters.DefaultsProvider;
 import org.apache.isis.applib.adapters.EncoderDecoder;
 import org.apache.isis.applib.adapters.Parser;
 import org.apache.isis.applib.adapters.Parser2;
 import org.apache.isis.applib.adapters.ValueSemanticsProvider;
 import org.apache.isis.applib.clock.Clock;
-import org.apache.isis.applib.profiles.Localization;
-import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
 import org.apache.isis.core.commons.config.ConfigurationConstants;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.exceptions.UnexpectedCallException;
 import org.apache.isis.core.commons.exceptions.UnknownTypeException;
 import org.apache.isis.core.commons.lang.LocaleUtil;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
@@ -43,9 +41,9 @@ import org.apache.isis.core.metamodel.facetapi.FacetAbstract;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.object.parseable.InvalidEntryException;
 import org.apache.isis.core.metamodel.facets.properties.defaults.PropertyDefaultFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
 public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbstract implements ValueSemanticsProvider<T>, EncoderDecoder<T>, Parser2<T>, DefaultsProvider<T> {
 
@@ -80,7 +78,7 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
     private ObjectSpecification specification;
 
     private final IsisConfiguration configuration;
-    private final ValueSemanticsProviderContext context;
+    private final ServicesInjector context;
 
     public ValueSemanticsProviderAndFacetAbstract(
             final Class<? extends Facet> adapterFacetType,
@@ -91,8 +89,7 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
             final Immutability immutability,
             final EqualByContent equalByContent,
             final T defaultValue,
-            final IsisConfiguration configuration,
-            final ValueSemanticsProviderContext context) {
+            final ServicesInjector context) {
         super(adapterFacetType, holder, Derivation.NOT_DERIVED);
         this.adaptedClass = adaptedClass;
         this.typicalLength = typicalLength;
@@ -101,13 +98,13 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
         this.equalByContent = (equalByContent == EqualByContent.HONOURED);
         this.defaultValue = defaultValue;
 
-        this.configuration = configuration;
+        this.configuration = context.getConfigurationServiceInternal();
         this.context = context;
     }
 
     public ObjectSpecification getSpecification() {
         if (specification == null) {
-            specification = getSpecificationLookup().loadSpecification(getAdaptedClass());
+            specification = getSpecificationLoader().loadSpecification(getAdaptedClass());
         }
         return specification;
     }
@@ -170,7 +167,7 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
     // ///////////////////////////////////////////////////////////////////////////
 
     @Override
-    public T parseTextEntry(final Object context, final String entry, final Localization localization) {
+    public T parseTextEntry(final Object context, final String entry) {
         if (entry == null) {
             throw new IllegalArgumentException();
         }
@@ -181,7 +178,7 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
                 return null;
             }
         }
-        return doParse(context, entry, localization);
+        return doParse(context, entry);
     }
 
     /**
@@ -192,10 +189,11 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
      *            parsed
      */
     protected T doParse(Object context, String entry) { 
-        throw new UnexpectedCallException(); 
+        return doParse(entry, context);
     } 
 
-    protected T doParse(Object context, String entry, Localization localization) { 
+    // REVIEW: this method used to take Localization as a third param, could now inline
+    protected T doParse(String entry, Object context) {
         return doParse(context, entry); 
     } 
 
@@ -210,11 +208,11 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
     }
 
     @Override
-    public String displayTitleOf(final Object object, final Localization localization) {
+    public String displayTitleOf(final Object object) {
         if (object == null) {
             return "";
         }
-        return titleString(object, localization);
+        return titleString(object);
     }
 
     @Override
@@ -226,11 +224,11 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
     }
 
     /**
-     * Defaults to {@link #displayTitleOf(Object, Localization)}.
+     * Defaults to {@link Parser#displayTitleOf(Object)}.
      */
     @Override
     public String parseableTitleOf(final Object existing) {
-        return displayTitleOf(existing, (Localization) null);
+        return displayTitleOf(existing);
     }
 
     protected String titleString(final Format formatter, final Object object) {
@@ -240,7 +238,7 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
     /**
      * Return a string representation of aforesaid object.
      */
-    protected abstract String titleString(Object object, Localization localization);
+    protected abstract String titleString(Object object);
 
     public abstract String titleStringWithMask(final Object value, final String usingMask);
 
@@ -312,7 +310,7 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
     // //////////////////////////////////////////////////////////
 
     protected ObjectAdapter createAdapter(final Class<?> type, final Object object) {
-        final ObjectSpecification specification = getSpecificationLookup().loadSpecification(type);
+        final ObjectSpecification specification = getSpecificationLoader().loadSpecification(type);
         if (specification.isNotCollection()) {
             return getAdapterManager().adapterFor(object);
         } else {
@@ -328,7 +326,7 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
         return configuration;
     }
 
-    protected ValueSemanticsProviderContext getContext() {
+    protected ServicesInjector getContext() {
         return context;
     }
 
@@ -336,28 +334,21 @@ public abstract class ValueSemanticsProviderAndFacetAbstract<T> extends FacetAbs
      * From {@link #getContext() context.}
      */
     protected AdapterManager getAdapterManager() {
-        return context.getAdapterManager();
+        return context.getPersistenceSessionServiceInternal();
     }
 
     /**
      * From {@link #getContext() context.}
      */
-    protected SpecificationLoader getSpecificationLookup() {
-        return context.getSpecificationLookup();
+    protected SpecificationLoader getSpecificationLoader() {
+        return context.getSpecificationLoader();
     }
 
     /**
      * From {@link #getContext() context.}
      */
-    protected ServicesInjector getDependencyInjector() {
-        return context.getDependencyInjector();
-    }
-
-    /**
-     * From {@link #getContext() context.}
-     */
-    protected AuthenticationSessionProvider getAuthenticationSessionProvider() {
-        return context.getAuthenticationSessionProvider();
+    protected ServicesInjector getServicesInjector() {
+        return context;
     }
 
     // //////////////////////////////////////////////////////////

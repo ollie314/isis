@@ -26,10 +26,14 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
 import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+
 import org.joda.time.LocalDate;
 import org.joda.time.LocalDateTime;
+
 import org.apache.isis.applib.AbstractViewModel;
 import org.apache.isis.applib.DomainObjectContainer;
 import org.apache.isis.applib.annotation.Programmatic;
@@ -40,6 +44,7 @@ import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.applib.fixtures.FixtureType;
 import org.apache.isis.applib.fixtures.InstallableFixture;
 import org.apache.isis.applib.services.wrapper.WrapperFactory;
+import org.apache.isis.applib.services.xactn.TransactionService;
 
 @ViewModelLayout(named="Script")
 public abstract class FixtureScript 
@@ -171,7 +176,7 @@ public abstract class FixtureScript
      * Will always be populated, initially by the default name, but can be
      * {@link #setLocalName(String) overridden}.
      */
-    @PropertyLayout(hidden = Where.EVERYWHERE)
+    @Programmatic
     public String getLocalName() {
         return localName;
     }
@@ -230,7 +235,7 @@ public abstract class FixtureScript
      * {@link FixtureScript}s are {@link Discoverability#NON_DISCOVERABLE not}.  This can be overridden in the
      * constructor, however or by calling the {@link #withDiscoverability(org.apache.isis.applib.fixturescripts.FixtureScript.Discoverability) setter}.
      */
-    @PropertyLayout(hidden = Where.EVERYWHERE)
+    @Programmatic
     public boolean isDiscoverable() {
         return discoverability == Discoverability.DISCOVERABLE;
     }
@@ -302,148 +307,182 @@ public abstract class FixtureScript
             return ExecutionParameters.asKeyValueMap(parameters);
         }
 
+        @Programmatic
         public String getParameters() {
             return executionParameters.getParameters();
         }
 
+        @Programmatic
         public Map<String,String> getParameterMap() {
             return executionParameters.getParameterMap();
         }
 
+        @Programmatic
         public String getParameter(final String parameterName) {
             return executionParameters.getParameter(parameterName);
         }
 
+        @Programmatic
         public <T> T getParameterAsT(final String parameterName, final Class<T> cls) {
             return executionParameters.getParameterAsT(parameterName,cls);
         }
 
+        @Programmatic
         public Boolean getParameterAsBoolean(final String parameterName) {
             return executionParameters.getParameterAsBoolean(parameterName);
         }
 
+        @Programmatic
         public Byte getParameterAsByte(final String parameterName) {
             return executionParameters.getParameterAsByte(parameterName);
         }
 
+        @Programmatic
         public Short getParameterAsShort(final String parameterName) {
             return executionParameters.getParameterAsShort(parameterName);
         }
 
+        @Programmatic
         public Integer getParameterAsInteger(final String parameterName) {
             return executionParameters.getParameterAsInteger(parameterName);
         }
 
+        @Programmatic
         public Long getParameterAsLong(final String parameterName) {
             return executionParameters.getParameterAsLong(parameterName);
         }
 
+        @Programmatic
         public Float getParameterAsFloat(final String parameterName) {
             return executionParameters.getParameterAsFloat(parameterName);
         }
 
+        @Programmatic
         public Double getParameterAsDouble(final String parameterName) {
             return executionParameters.getParameterAsDouble(parameterName);
         }
 
+        @Programmatic
         public Character getParameterAsCharacter(final String parameterName) {
             return executionParameters.getParameterAsCharacter(parameterName);
         }
 
+        @Programmatic
         public BigInteger getParameterAsBigInteger(final String parameterName) {
             return executionParameters.getParameterAsBigInteger(parameterName);
         }
 
+        @Programmatic
         public BigDecimal getParameterAsBigDecimal(final String parameterName) {
             return executionParameters.getParameterAsBigDecimal(parameterName);
         }
 
+        @Programmatic
         public LocalDate getParameterAsLocalDate(final String parameterName) {
             return executionParameters.getParameterAsLocalDate(parameterName);
         }
 
+        @Programmatic
         public LocalDateTime getParameterAsLocalDateTime(final String parameterName) {
             return executionParameters.getParameterAsLocalDateTime(parameterName);
         }
 
+        @Programmatic
         public <T extends Enum<T>> T getParameterAsEnum(final String parameterName, final Class<T> enumClass) {
             return executionParameters.getParameterAsEnum(parameterName, enumClass);
         }
 
-
+        @Programmatic
         public void setParameterIfNotPresent(final String parameterName, final String parameterValue) {
             executionParameters.setParameterIfNotPresent(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Boolean parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Byte parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Short parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Integer parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Long parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Float parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Double parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Character parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final BigInteger parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final java.util.Date parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final java.sql.Date parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final LocalDate parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final LocalDateTime parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final org.joda.time.DateTime parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final BigDecimal parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final Enum<?> parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
+        @Programmatic
         public void setParameter(final String parameterName, final String parameterValue) {
             executionParameters.setParameter(parameterName, parameterValue);
         }
 
-
+        @Programmatic
         public List<FixtureResult> getResults() {
             return fixtureResultList.getResults();
         }
@@ -452,10 +491,12 @@ public abstract class FixtureScript
          * @deprecated - use {@link #addResult(FixtureScript, Object)} instead.
          */
         @Deprecated
+        @Programmatic
         public <T> T add(final FixtureScript script, final T object) {
             return addResult(script, object);
         }
 
+        @Programmatic
         public <T> T addResult(final FixtureScript script, final T object) {
             fixtureResultList.add(script, object);
             return object;
@@ -464,16 +505,19 @@ public abstract class FixtureScript
         /**
          * @deprecated - use {@link #addResult(FixtureScript, String, Object)} instead.
          */
+        @Programmatic
         @Deprecated
         public <T> T add(final FixtureScript script, final String key, final T object) {
             return addResult(script, key, object);
         }
 
+        @Programmatic
         public <T> T addResult(final FixtureScript script, final String key, final T object) {
             fixtureResultList.add(script, key, object);
             return object;
         }
 
+        @Programmatic
         public <T> T lookup(final String key, final Class<T> cls) {
             return fixtureResultList.lookup(key, cls);
         }
@@ -483,6 +527,7 @@ public abstract class FixtureScript
          * that are {@link org.apache.isis.applib.fixturescripts.FixtureScript.ExecutionContext#addResult(FixtureScript, Object)} added),
          * uses a key that is derived from the fixture's class name.
          */
+        @Programmatic
         public void executeChild(final FixtureScript callingFixtureScript, final FixtureScript childFixtureScript) {
             executeChildT(callingFixtureScript, childFixtureScript);
         }
@@ -494,6 +539,7 @@ public abstract class FixtureScript
          *
          * @return the child fixture script.
          */
+        @Programmatic
         public <T extends FixtureScript> T executeChildT(final FixtureScript callingFixtureScript, final T childFixtureScript) {
              return executeChildT(callingFixtureScript, null, childFixtureScript);
         }
@@ -503,6 +549,7 @@ public abstract class FixtureScript
          * that are {@link org.apache.isis.applib.fixturescripts.FixtureScript.ExecutionContext#addResult(FixtureScript, Object)} added),
          * uses a key that overriding the default name of the fixture script with one more meaningful in the context of this fixture.
          */
+        @Programmatic
         public void executeChild(final FixtureScript callingFixtureScript, final String localNameOverride, final FixtureScript childFixtureScript) {
 
             executeChildT(callingFixtureScript, localNameOverride, childFixtureScript);
@@ -515,6 +562,7 @@ public abstract class FixtureScript
          *
          * @return the child fixture script.
          */
+        @Programmatic
         public <T extends FixtureScript> T executeChildT(final FixtureScript callingFixtureScript, final String localNameOverride, final T childFixtureScript) {
 
             childFixtureScript.setParentPath(callingFixtureScript.pathWith(""));
@@ -539,6 +587,7 @@ public abstract class FixtureScript
          * @deprecated - should not be called directly, but has <code>public</code> visibility so there is scope for confusion.  Replaced by method with private visibility.
          */
         @Deprecated
+        @Programmatic
         public void executeIfNotAlready(final FixtureScript fixtureScript) {
             executeChildIfNotAlready(fixtureScript);
         }
@@ -552,16 +601,72 @@ public abstract class FixtureScript
             }
         }
 
-        //region > shouldExecute
+        //region > previouslyExecuted
 
+        /**
+         * Always populated, irrespective of {@link FixtureScripts#getMultipleExecutionStrategy() execution strategy},
+         * but used only by {@link FixtureScripts.MultipleExecutionStrategy#EXECUTE_ONCE_BY_VALUE} to determine whether
+         * should execute or not.
+         */
+        private final List<FixtureScript> previouslyExecuted = Lists.newArrayList();
+
+        /**
+         * Returns a list of the {@link FixtureScript} instances that have already been executed.
+         *
+         * <p>
+         *     This allows each individual {@link FixtureScript} to determine whether they need to execute; the
+         *     {@link FixtureScripts#getMultipleExecutionStrategy()} can then be left as simply
+         *     {@link FixtureScripts.MultipleExecutionStrategy#EXECUTE}.
+         * </p>
+         */
+        @Programmatic
+        public List<FixtureScript> getPreviouslyExecuted() {
+            return Collections.unmodifiableList(previouslyExecuted);
+        }
+
+        //endregion
+
+        //region > shouldExecute
+        private boolean shouldExecute(final FixtureScript fixtureScript) {
+
+            final boolean previouslyExecuted = this.previouslyExecuted.contains(fixtureScript);
+            if(!previouslyExecuted) {
+                this.previouslyExecuted.add(fixtureScript);
+            }
+
+            final FixtureScripts.MultipleExecutionStrategy executionStrategy =
+                    fixtureScripts.getMultipleExecutionStrategy();
+
+            switch (executionStrategy) {
+
+                case IGNORE:
+                case EXECUTE_ONCE_BY_CLASS:
+                    return shouldExecuteForExecuteOnceByClassStrategy(fixtureScript);
+
+                case EXECUTE_ONCE_BY_VALUE:
+                    return !previouslyExecuted;
+
+                case EXECUTE:
+                    return true;
+
+                default:
+                    throw new IllegalArgumentException("Execution strategy: '" + executionStrategy + "' not recognized");
+            }
+
+        }
+
+        /**
+         * used and populated only if the {@link FixtureScripts.MultipleExecutionStrategy#EXECUTE_ONCE_BY_CLASS}
+         * strategy is in use.
+         */
         private final Map<String,Class> fixtureScriptClasses = Maps.newLinkedHashMap();
 
-        private boolean shouldExecute(final FixtureScript fixtureScript) {
+        private boolean shouldExecuteForExecuteOnceByClassStrategy(final FixtureScript fixtureScript) {
             final boolean alreadyExecuted = fixtureScriptClasses.values().contains(fixtureScript.getClass());
             if(!alreadyExecuted) {
                 fixtureScriptClasses.put(fixtureScript.getQualifiedName(), fixtureScript.getClass());
             }
-            return !alreadyExecuted || fixtureScripts.getMultipleExecutionStrategy().isExecute();
+            return !alreadyExecuted;
         }
         //endregion
 
@@ -570,6 +675,7 @@ public abstract class FixtureScript
         private int traceHighwatermark = 40;
         private PrintStream tracePrintStream;
 
+        @Programmatic
         public ExecutionContext withTracing(final PrintStream tracePrintStream) {
             this.tracePrintStream = tracePrintStream;
             return this;
@@ -611,12 +717,15 @@ public abstract class FixtureScript
 
 
         private Map<Class, Object> userData = Maps.newHashMap();
+        @Programmatic
         public void setUserData(final Object object) {
             userData.put(object.getClass(), object);
         }
+        @Programmatic
         public <T> T getUserData(final Class<T> cls) {
             return (T) userData.get(cls);
         }
+        @Programmatic
         public <T> T clearUserData(final Class<T> cls) {
             return (T) userData.remove(cls);
         }
@@ -723,6 +832,7 @@ public abstract class FixtureScript
     /**
      * Use instead {@link org.apache.isis.applib.fixturescripts.FixtureScript.ExecutionContext#lookup(String, Class)} directly.
      */
+    @Programmatic
     @Deprecated
     public <T> T lookup(final String key, final Class<T> cls) {
         if(executionContext == null) {
@@ -805,6 +915,7 @@ public abstract class FixtureScript
     //region > (legacy) InstallableFixture impl
 
     @Override
+    @Programmatic
     public FixtureType getType() {
         return FixtureType.DOMAIN_OBJECTS;
     }
@@ -846,7 +957,22 @@ public abstract class FixtureScript
         return wrapperFactory.unwrap(possibleWrappedDomainObject);
     }
 
+    /**
+     * Convenience method
+     */
+    protected <T> T mixin(final Class<T> mixinClass, final Object mixedIn) {
+        return container.mixin(mixinClass, mixedIn);
+    }
+
+    /**
+     * Convenience method
+     */
+    protected void nextTransaction() {
+        transactionService.nextTransaction();
+    }
+
     //endregion
+
 
     //region > helpers (local)
 
@@ -866,6 +992,9 @@ public abstract class FixtureScript
 
     @javax.inject.Inject
     protected WrapperFactory wrapperFactory;
+
+    @javax.inject.Inject
+    protected TransactionService transactionService;
 
 
     //endregion

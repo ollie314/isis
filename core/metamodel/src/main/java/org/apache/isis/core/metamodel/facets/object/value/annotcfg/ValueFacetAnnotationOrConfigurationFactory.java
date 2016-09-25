@@ -24,31 +24,20 @@ import com.google.common.base.Strings;
 import org.apache.isis.applib.adapters.EncoderDecoder;
 import org.apache.isis.applib.adapters.Parser;
 import org.apache.isis.applib.annotation.Value;
-import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
-import org.apache.isis.core.commons.authentication.AuthenticationSessionProviderAware;
-import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManagerAware;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facets.Annotations;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
-import org.apache.isis.core.metamodel.facets.object.value.EqualByContentFacet;
-import org.apache.isis.core.metamodel.facets.object.parented.ParentedFacet;
 import org.apache.isis.core.metamodel.facets.object.encodeable.EncodableFacet;
 import org.apache.isis.core.metamodel.facets.object.icon.IconFacet;
 import org.apache.isis.core.metamodel.facets.object.immutable.ImmutableFacet;
+import org.apache.isis.core.metamodel.facets.object.parented.ParentedCollectionFacet;
 import org.apache.isis.core.metamodel.facets.object.parseable.ParseableFacet;
 import org.apache.isis.core.metamodel.facets.object.title.TitleFacet;
+import org.apache.isis.core.metamodel.facets.object.value.EqualByContentFacet;
 import org.apache.isis.core.metamodel.facets.object.value.ValueFacet;
-import org.apache.isis.core.metamodel.runtimecontext.RuntimeContext;
-import org.apache.isis.core.metamodel.runtimecontext.RuntimeContextAware;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjectorAware;
-import org.apache.isis.core.metamodel.facets.object.value.vsp.ValueSemanticsProviderContext;
+
 import org.apache.isis.core.metamodel.facets.object.value.vsp.ValueSemanticsProviderUtil;
 
 /**
@@ -75,15 +64,10 @@ import org.apache.isis.core.metamodel.facets.object.value.vsp.ValueSemanticsProv
  * <li> {@link EqualByContentFacet} - if specified explicitly in the annotation
  * </ul>
  * <p>
- * Note that {@link ParentedFacet} is <i>not</i> installed.
+ * Note that {@link ParentedCollectionFacet} is <i>not</i> installed.
  */
-public class ValueFacetAnnotationOrConfigurationFactory extends FacetFactoryAbstract implements IsisConfigurationAware, AuthenticationSessionProviderAware, AdapterManagerAware, ServicesInjectorAware, RuntimeContextAware {
+public class ValueFacetAnnotationOrConfigurationFactory extends FacetFactoryAbstract  {
 
-    private IsisConfiguration configuration;
-    private RuntimeContext runtimeContext;
-    private AuthenticationSessionProvider authenticationSessionProvider;
-    private AdapterManager adapterManager;
-    private ServicesInjector servicesInjector;
 
     public ValueFacetAnnotationOrConfigurationFactory() {
         super(FeatureType.OBJECTS_ONLY);
@@ -102,16 +86,16 @@ public class ValueFacetAnnotationOrConfigurationFactory extends FacetFactoryAbst
         // create from annotation, if present
         final Value annotation = Annotations.getAnnotation(cls, Value.class);
         if (annotation != null) {
-            final ValueFacetAnnotation facet = new ValueFacetAnnotation(cls, holder, getIsisConfiguration(), createValueSemanticsProviderContext());
+            final ValueFacetAnnotation facet = new ValueFacetAnnotation(cls, holder, servicesInjector);
             if (facet.isValid()) {
                 return facet;
             }
         }
 
         // otherwise, try to create from configuration, if present
-        final String semanticsProviderName = ValueSemanticsProviderUtil.semanticsProviderNameFromConfiguration(cls, configuration);
+        final String semanticsProviderName = ValueSemanticsProviderUtil.semanticsProviderNameFromConfiguration(cls, getConfiguration());
         if (!Strings.isNullOrEmpty(semanticsProviderName)) {
-            final ValueFacetFromConfiguration facet = new ValueFacetFromConfiguration(semanticsProviderName, holder, getIsisConfiguration(), createValueSemanticsProviderContext());
+            final ValueFacetFromConfiguration facet = new ValueFacetFromConfiguration(semanticsProviderName, holder, servicesInjector);
             if (facet.isValid()) {
                 return facet;
             }
@@ -121,60 +105,5 @@ public class ValueFacetAnnotationOrConfigurationFactory extends FacetFactoryAbst
         return null;
     }
 
-    protected ValueSemanticsProviderContext createValueSemanticsProviderContext() {
-        return new ValueSemanticsProviderContext(getDeploymentCategory(), getAuthenticationSessionProvider(), getSpecificationLoader(), getAdapterManager(), getServicesInjector());
-    }
-
-    // ////////////////////////////////////////////////////////////////////
-    // Injected
-    // ////////////////////////////////////////////////////////////////////
-
-    /**
-     * Derived from {@link #setRuntimeContext(RuntimeContext)} (since {@link RuntimeContextAware}).
-     */
-    private DeploymentCategory getDeploymentCategory() {
-        return runtimeContext.getDeploymentCategory();
-    }
-
-    public IsisConfiguration getIsisConfiguration() {
-        return configuration;
-    }
-
-    @Override
-    public void setConfiguration(final IsisConfiguration configuration) {
-        this.configuration = configuration;
-    }
-
-    public AuthenticationSessionProvider getAuthenticationSessionProvider() {
-        return authenticationSessionProvider;
-    }
-
-    @Override
-    public void setAuthenticationSessionProvider(final AuthenticationSessionProvider authenticationSessionProvider) {
-        this.authenticationSessionProvider = authenticationSessionProvider;
-    }
-
-    public AdapterManager getAdapterManager() {
-        return adapterManager;
-    }
-
-    @Override
-    public void setAdapterManager(final AdapterManager adapterManager) {
-        this.adapterManager = adapterManager;
-    }
-
-    public ServicesInjector getServicesInjector() {
-        return servicesInjector;
-    }
-
-    @Override
-    public void setServicesInjector(final ServicesInjector dependencyInjector) {
-        this.servicesInjector = dependencyInjector;
-    }
-
-    @Override
-    public void setRuntimeContext(RuntimeContext runtimeContext) {
-        this.runtimeContext = runtimeContext;
-    }
 
 }

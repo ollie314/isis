@@ -19,20 +19,18 @@
 
 package org.apache.isis.core.metamodel.specloader.specimpl.standalonelist;
 
-import java.util.Collections;
 import java.util.List;
 
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facets.actcoll.typeof.TypeOfFacetDefaultToObject;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ActionType;
 import org.apache.isis.core.metamodel.spec.FreeStandingList;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationContext;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAssociation;
-import org.apache.isis.core.metamodel.spec.feature.ObjectMemberContext;
+import org.apache.isis.core.metamodel.specloader.facetprocessor.FacetProcessor;
 import org.apache.isis.core.metamodel.specloader.specimpl.ObjectSpecificationAbstract;
 
 /**
@@ -41,30 +39,28 @@ import org.apache.isis.core.metamodel.specloader.specimpl.ObjectSpecificationAbs
  */
 public class ObjectSpecificationOnStandaloneList extends ObjectSpecificationAbstract {
 
-    /**
-     * Used as {@link #getShortIdentifier()}, {@link #getName()} and
-     * {@link #getPluralName()}.
-     */
     private static final String NAME = "Instances";
     private static final String DESCRIBED_AS = "Typed instances";
     private static final String ICON_NAME = "instances";
 
+    //region > constructor
+
     public ObjectSpecificationOnStandaloneList(
-            final SpecificationContext specificationContext,
-            final ObjectMemberContext objectMemberContext) {
-        super(FreeStandingList.class, NAME, specificationContext, objectMemberContext);
+            final ServicesInjector servicesInjector,
+            final FacetProcessor facetProcessor) {
+        super(FreeStandingList.class, NAME, servicesInjector, facetProcessor);
     }
 
-    // /////////////////////////////////////////////////////////
-    // Introspection
-    // /////////////////////////////////////////////////////////
+    //endregion
+
+    //region > Introspection
 
     @Override
     public void introspectTypeHierarchyAndMembers() {
         updateSuperclass(Object.class);
 
         addFacet(new CollectionFacetOnStandaloneList(this));
-        addFacet(new TypeOfFacetDefaultToObject(this, getSpecificationLookup()) {
+        addFacet(new TypeOfFacetDefaultToObject(this, getSpecificationLoader()) {
         });
 
         // ObjectList specific
@@ -74,33 +70,21 @@ public class ObjectSpecificationOnStandaloneList extends ObjectSpecificationAbst
         // don't install anything for NotPersistableFacet
     }
 
-    // /////////////////////////////////////////////////////
-    // Service
-    // /////////////////////////////////////////////////////
+    //endregion
 
-    /**
-     * No-op.
-     * 
-     * <p>
-     * Review: is this ever called for an instance of this class? If not, then
-     * no need to override.
-     */
-    @Override
-    public void markAsService() {
-    }
-
+    //region > isXxx
 
     @Override
     public boolean isService() {
         return false;
     }
-
-    // /////////////////////////////////////////////////////////
-    // view models and wizards
-    // /////////////////////////////////////////////////////////
-
     @Override
     public boolean isViewModel() {
+        return false;
+    }
+
+    @Override
+    public boolean isMixin() {
         return false;
     }
 
@@ -114,10 +98,9 @@ public class ObjectSpecificationOnStandaloneList extends ObjectSpecificationAbst
         return false;
     }
 
-    // /////////////////////////////////////////////////////
-    // Associations
-    // /////////////////////////////////////////////////////
+    //endregion
 
+    //region > Associations
     /**
      * Review: is this ever called for an instance of this class? If not, then
      * no need to override.
@@ -127,12 +110,12 @@ public class ObjectSpecificationOnStandaloneList extends ObjectSpecificationAbst
         return null;
     }
 
-    // /////////////////////////////////////////////////////
-    // Title and Icon
-    // /////////////////////////////////////////////////////
+    //endregion
+
+    //region > Title and Icon
 
     @Override
-    public String getTitle(final ObjectAdapter object, final Localization localization) {
+    public String getTitle(final ObjectAdapter object) {
         return ((FreeStandingList) object.getObject()).titleString();
     }
 
@@ -141,10 +124,9 @@ public class ObjectSpecificationOnStandaloneList extends ObjectSpecificationAbst
         return ICON_NAME;
     }
 
-    // /////////////////////////////////////////////////////
-    // Object Actions
-    // /////////////////////////////////////////////////////
+    //endregion
 
+    //region > Object Actions
     /**
      * Review: is it necessary to override for this subclass?
      */
@@ -169,17 +151,8 @@ public class ObjectSpecificationOnStandaloneList extends ObjectSpecificationAbst
         return null;
     }
 
-    // /////////////////////////////////////////////////////
-    // Service Actions
-    // /////////////////////////////////////////////////////
 
-    /**
-     * Review: is it necessary to override for this subclass?
-     */
-    @Override
-    public List<ObjectAction> getServiceActionsReturning(final List<ActionType> type) {
-        return Collections.emptyList();
-    }
+    //endregion
 
 
 }

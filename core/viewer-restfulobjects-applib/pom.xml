@@ -23,19 +23,11 @@
     <parent>
         <groupId>org.apache.isis.core</groupId>
         <artifactId>isis</artifactId>
-        <version>1.9.0-SNAPSHOT</version>
+        <version>1.14.0-SNAPSHOT</version>
     </parent>
 
 	<artifactId>isis-core-viewer-restfulobjects-applib</artifactId>
-	<name>Isis Core RestfulObjects Viewer AppLib</name>
-
-	<properties>
-		<siteBaseDir>..</siteBaseDir>
-		<relativeUrl>viewer-restfulobjects-applib/</relativeUrl>
-	</properties>
-
-    <!-- used in Site generation for relative references. -->
-    <url>http://isis.apache.org/${relativeUrl}</url>
+	<name>Apache Isis RestfulObjects Viewer AppLib</name>
 
 	<dependencies>
 		<dependency>
@@ -62,12 +54,6 @@
         <dependency>
             <groupId>org.apache.isis.core</groupId>
             <artifactId>isis-core-unittestsupport</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
             <scope>test</scope>
         </dependency>
 

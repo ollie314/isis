@@ -19,27 +19,45 @@
 
 package org.apache.isis.core.runtime.authentication;
 
+import org.apache.isis.applib.annotation.Programmatic;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.commons.components.ApplicationScopedComponent;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 
+/**
+ * Implementing class is added to {@link ServicesInjector} as an (internal) domain service; all public methods
+ * must be annotated using {@link Programmatic}.
+ */
 public interface AuthenticationManager extends ApplicationScopedComponent {
+
+    @Programmatic
+    void init(final DeploymentCategory deploymentCategory);
+
+    @Programmatic
+    void shutdown();
 
     /**
      * Caches and returns an authentication {@link AuthenticationSession} if the
      * {@link AuthenticationRequest request} is valid; otherwise returns
      * <tt>null</tt>.
      */
+    @Programmatic
     AuthenticationSession authenticate(AuthenticationRequest request);
 
+    @Programmatic
     boolean supportsRegistration(Class<? extends RegistrationDetails> registrationDetailsClass);
 
+    @Programmatic
     boolean register(RegistrationDetails registrationDetails);
 
     /**
      * Whether the provided {@link AuthenticationSession} is still valid.
      */
+    @Programmatic
     boolean isSessionValid(AuthenticationSession authenticationSession);
 
+    @Programmatic
     void closeSession(AuthenticationSession authenticationSession);
 
 }

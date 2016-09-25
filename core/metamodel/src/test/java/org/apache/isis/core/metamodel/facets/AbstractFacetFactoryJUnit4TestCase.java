@@ -21,22 +21,32 @@ package org.apache.isis.core.metamodel.facets;
 
 import java.lang.reflect.Method;
 import java.util.List;
+
+import org.jmock.Expectations;
 import org.jmock.auto.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
+
 import org.apache.isis.applib.Identifier;
-import org.apache.isis.core.commons.config.IsisConfiguration;
+import org.apache.isis.applib.services.i18n.TranslationService;
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategoryProvider;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facetapi.IdentifiedHolder;
 import org.apache.isis.core.metamodel.facetapi.MethodRemover;
 import org.apache.isis.core.metamodel.facets.object.domainobject.autocomplete.AutoCompleteFacetForDomainObjectAnnotation;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
+import org.apache.isis.core.metamodel.services.transtate.TransactionStateProviderInternal;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
 import org.apache.isis.core.metamodel.spec.feature.OneToManyAssociation;
 import org.apache.isis.core.metamodel.spec.feature.OneToOneActionParameter;
 import org.apache.isis.core.metamodel.spec.feature.OneToOneAssociation;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2.Mode;
 
@@ -46,14 +56,27 @@ public abstract class AbstractFacetFactoryJUnit4TestCase {
     public JUnitRuleMockery2 context = JUnitRuleMockery2.createFor(Mode.INTERFACES_AND_CLASSES);
 
     @Mock
-    protected SpecificationLoaderSpi mockSpecificationLoaderSpi;
+    protected SpecificationLoader mockSpecificationLoader;
+    @Mock
+    protected PersistenceSessionServiceInternal mockPersistenceSessionServiceInternal;
     @Mock
     protected MethodRemover mockMethodRemover;
     @Mock
     protected FacetHolder mockFacetHolder;
+    @Mock
+    protected ServicesInjector mockServicesInjector;
+    @Mock
+    protected TranslationService mockTranslationService;
+    @Mock
+    protected TransactionStateProviderInternal mockTransactionStateProviderInternal;
 
     @Mock
-    protected IsisConfiguration mockConfiguration;
+    protected IsisConfigurationDefault mockConfiguration;
+
+    @Mock
+    protected DeploymentCategoryProvider mockDeploymentCategoryProvider;
+    @Mock
+    protected AuthenticationSessionProvider mockAuthenticationSessionProvider;
 
     protected IdentifiedHolder facetHolder;
 
@@ -84,6 +107,42 @@ public abstract class AbstractFacetFactoryJUnit4TestCase {
 
     @Before
     public void setUpFacetedMethodAndParameter() throws Exception {
+
+
+        context.checking(new Expectations() {{
+
+            allowing(mockServicesInjector).getDeploymentCategoryProvider();
+            will(returnValue(mockDeploymentCategoryProvider));
+
+            allowing(mockServicesInjector).lookupService(DeploymentCategoryProvider.class);
+            will(returnValue(mockDeploymentCategoryProvider));
+
+            allowing(mockServicesInjector).lookupService(TransactionStateProviderInternal.class);
+            will(returnValue(mockTransactionStateProviderInternal));
+
+            allowing(mockDeploymentCategoryProvider).getDeploymentCategory();
+            will(returnValue(DeploymentCategory.PRODUCTION));
+
+            allowing(mockServicesInjector).getConfigurationServiceInternal();
+            will(returnValue(mockConfiguration));
+
+            allowing(mockServicesInjector).getPersistenceSessionServiceInternal();
+            will(returnValue(mockPersistenceSessionServiceInternal));
+
+            allowing(mockServicesInjector).lookupService(TranslationService.class);
+            will(returnValue(mockTranslationService));
+
+            allowing(mockServicesInjector).getAuthenticationSessionProvider();
+            will(returnValue(mockAuthenticationSessionProvider));
+
+            allowing(mockServicesInjector).lookupService(AuthenticationSessionProvider.class);
+            will(returnValue(mockAuthenticationSessionProvider));
+
+            allowing(mockServicesInjector).getSpecificationLoader();
+            will(returnValue(mockSpecificationLoader));
+
+        }});
+
         facetHolder = new AbstractFacetFactoryTest.IdentifiedHolderImpl(Identifier.propertyOrCollectionIdentifier(Customer.class, "firstName"));
         facetedMethod = FacetedMethod.createForProperty(AbstractFacetFactoryTest.Customer.class, "firstName");
         facetedMethodParameter = new FacetedMethodParameter(facetedMethod.getOwningType(), facetedMethod.getMethod(), String.class);

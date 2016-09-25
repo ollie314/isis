@@ -18,9 +18,9 @@
  */
 package org.apache.isis.tool.mavenplugin;
 
-import java.io.File;
-import java.util.List;
+import java.io.IOException;
 import java.util.Set;
+
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -29,16 +29,13 @@ import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
-import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationBuilderDefault;
-import org.apache.isis.core.metamodel.app.IsisMetaModel;
-import org.apache.isis.core.metamodel.runtimecontext.noruntime.RuntimeContextNoRuntime;
-import org.apache.isis.core.runtime.services.ServicesInstaller;
-import org.apache.isis.core.runtime.services.ServicesInstallerFromAnnotation;
-import org.apache.isis.core.runtime.services.ServicesInstallerFromConfigurationAndAnnotation;
-import org.apache.isis.core.runtime.system.DeploymentType;
-import org.apache.isis.progmodels.dflt.ProgrammingModelFacetsJava5;
-import org.apache.isis.tool.mavenplugin.util.IsisMetaModels;
+
+import org.apache.isis.applib.AppManifest;
+import org.apache.isis.core.commons.factory.InstanceUtil;
+import org.apache.isis.core.metamodel.specloader.validator.MetaModelInvalidException;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactoryBuilder;
+import org.apache.isis.core.runtime.system.context.IsisContext;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 import org.apache.isis.tool.mavenplugin.util.MavenProjects;
 
 public abstract class IsisMojoAbstract extends AbstractMojo {
@@ -48,89 +45,63 @@ public abstract class IsisMojoAbstract extends AbstractMojo {
     @Component
     private MavenProject mavenProject;
 
-    @Parameter(required = true, readonly = false, property = "isisConfigDir")
-    private String isisConfigDir;
+    @Parameter(required = true, readonly = false, property = "appManifest")
+    private String appManifest;
 
-    private final MetaModelProcessor metaModelProcessor;
-    private final ContextForMojo context;
-
-    protected IsisMojoAbstract(final MetaModelProcessor metaModelProcessor) {
-        this.metaModelProcessor = metaModelProcessor;
-        this.context = new ContextForMojo(mavenProject, getLog());
+    protected IsisMojoAbstract() {
     }
 
     public void execute() throws MojoExecutionException, MojoFailureException {
 
+        final ContextForMojo context = new ContextForMojo(mavenProject, getLog());
+
         final Plugin plugin = MavenProjects.lookupPlugin(mavenProject, CURRENT_PLUGIN_KEY);
-        final List<Object> serviceList = plugin != null ? serviceListFor(plugin) : null;
-        if(serviceList == null || serviceList.size() == 0) {
-            return;
-        }
-        getLog().info("Found " + serviceList.size() + " services");
 
-        usingIsisMetaModel(serviceList, metaModelProcessor);
-    }
+        final AppManifest manifest = InstanceUtil.createInstance(this.appManifest, AppManifest.class);
 
-    private void usingIsisMetaModel(
-            final List<Object> serviceList,
-            final MetaModelProcessor metaModelProcessor) throws MojoExecutionException, MojoFailureException {
-
-        IsisMetaModel isisMetaModel = null;
+        final IsisSessionFactoryBuilder isisSessionFactoryBuilder = new IsisSessionFactoryBuilder(manifest);
+        IsisSessionFactory isisSessionFactory = null;
         try {
-            isisMetaModel = bootstrapIsis(serviceList);
-            metaModelProcessor.process(isisMetaModel, context);
+            isisSessionFactory = isisSessionFactoryBuilder.buildSessionFactory();
+            if(!isisSessionFactoryBuilder.isMetaModelValid()) {
+                MetaModelInvalidException metaModelInvalidException = IsisContext
+                        .getMetaModelInvalidExceptionIfAny();
+                Set<String> validationErrors = metaModelInvalidException.getValidationErrors();
+                    context.throwFailureException(validationErrors.size() + " meta-model problems found.", validationErrors);
+                return;
+            }
+            final IsisSessionFactory isisSessionFactoryFinal = isisSessionFactory;
+            isisSessionFactory.doInSession(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            doExecute(context, isisSessionFactoryFinal);
+                        } catch (IOException e) {
+                            ;
+                            // ignore
+                        } catch (MojoFailureException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+
+        } catch(RuntimeException e) {
+            if(e.getCause() instanceof MojoFailureException) {
+                throw (MojoFailureException)e.getCause();
+            }
+            throw e;
         } finally {
-            IsisMetaModels.disposeSafely(isisMetaModel);
-        }
-    }
-
-    private List<Object> serviceListFor(Plugin plugin) throws MojoFailureException {
-        IsisConfiguration isisConfiguration = getIsisConfiguration();
-
-        final ServicesInstaller servicesInstaller;
-        if(isisConfiguration == null) {
-            servicesInstaller = new ServicesInstallerFromAnnotation();
-        } else {
-            final ServicesInstallerFromConfigurationAndAnnotation servicesInstallerFromConfigurationAndAnnotation = new ServicesInstallerFromConfigurationAndAnnotation();
-            servicesInstallerFromConfigurationAndAnnotation.setConfiguration(isisConfiguration);
-            servicesInstaller = servicesInstallerFromConfigurationAndAnnotation;
+            if(isisSessionFactory != null) {
+                isisSessionFactory.destroyServicesAndShutdown();
+            }
         }
 
-        servicesInstaller.setIgnoreFailures(true);
-        servicesInstaller.init();
-
-        return servicesInstaller.getServices(DeploymentType.SERVER_PROTOTYPE);
     }
 
-    private IsisConfiguration getIsisConfiguration() throws MojoFailureException {
-        final File file = getIsisConfigDir();
-        final String absoluteConfigDir = file.getAbsolutePath();
-        if(!file.exists() || !file.isDirectory()) {
-            context.throwFailureException("Configuration error",
-                    String.format("isisConfigDir (%s) does not exist or is not a directory", absoluteConfigDir));
-        }
-        final IsisConfigurationBuilderDefault configBuilder = new IsisConfigurationBuilderDefault(absoluteConfigDir);
-        configBuilder.addDefaultConfigurationResources();
-        return configBuilder.getConfiguration();
-    }
-
-    private File getIsisConfigDir() {
-        File file = new File(isisConfigDir);
-        if(!file.isAbsolute()) {
-            final File basedir = mavenProject.getBasedir();
-            file = new File(basedir, isisConfigDir);
-        }
-        return file;
-    }
-
-    private static IsisMetaModel bootstrapIsis(List<Object> serviceList) {
-        IsisMetaModel isisMetaModel = new IsisMetaModel(
-                                            new RuntimeContextNoRuntime(),
-                                            new ProgrammingModelFacetsJava5(),
-                                            serviceList);
-        isisMetaModel.init();
-        return isisMetaModel;
-    }
+    protected abstract void doExecute(
+            final ContextForMojo context,
+            final IsisSessionFactory isisSessionFactory)
+            throws MojoFailureException, IOException;
 
     //region > Context
     static class ContextForMojo implements MetaModelProcessor.Context {

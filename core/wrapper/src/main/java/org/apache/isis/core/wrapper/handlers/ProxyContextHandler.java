@@ -19,42 +19,32 @@
 
 package org.apache.isis.core.wrapper.handlers;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
-
 import java.util.Collection;
 import java.util.Map;
 
-import org.apache.isis.applib.services.wrapper.WrapperFactory;
 import org.apache.isis.applib.services.wrapper.WrapperFactory.ExecutionMode;
-import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
-import org.apache.isis.core.commons.ensure.Ensure;
-import org.apache.isis.core.metamodel.adapter.ObjectPersistor;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
 import org.apache.isis.core.metamodel.spec.feature.OneToManyAssociation;
-import org.apache.isis.core.wrapper.proxy.ProxyInstantiator;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
+import org.apache.isis.core.wrapper.proxy.ProxyCreator;
 
 public class ProxyContextHandler {
 
-    private final ProxyInstantiator proxyInstantiator;
+    private final ProxyCreator proxyCreator;
     
-    public ProxyContextHandler(final ProxyInstantiator proxyInstantiator) {
-        this.proxyInstantiator = proxyInstantiator;
+    public ProxyContextHandler(final ProxyCreator proxyCreator) {
+        this.proxyCreator = proxyCreator;
     }
-    
-    public <T> T proxy(final T domainObject, final WrapperFactory wrapperFactory, final ExecutionMode mode, final AuthenticationSessionProvider authenticationSessionProvider, final SpecificationLoader specificationLookup, final AdapterManager adapterManager, final ObjectPersistor objectPersistor) {
 
-        Ensure.ensureThatArg(wrapperFactory, is(not(nullValue())));
-        Ensure.ensureThatArg(authenticationSessionProvider, is(not(nullValue())));
-        Ensure.ensureThatArg(specificationLookup, is(not(nullValue())));
-        Ensure.ensureThatArg(adapterManager, is(not(nullValue())));
-        Ensure.ensureThatArg(objectPersistor, is(not(nullValue())));
+    public <T> T proxy(
+            final T domainObject,
+            final ExecutionMode mode,
+            final IsisSessionFactory isisSessionFactory) {
 
-        final DomainObjectInvocationHandler<T> invocationHandler = new DomainObjectInvocationHandler<T>(domainObject, wrapperFactory, mode, authenticationSessionProvider, specificationLookup, adapterManager, objectPersistor, this);
+        final DomainObjectInvocationHandler<T> invocationHandler = new DomainObjectInvocationHandler<T>(domainObject,
+                mode,
+                this, isisSessionFactory);
 
-        return proxyInstantiator.instantiateProxy(invocationHandler);
+        return proxyCreator.instantiateProxy(invocationHandler);
     }
 
     /**
@@ -66,7 +56,7 @@ public class ProxyContextHandler {
         final CollectionInvocationHandler<T, Collection<E>> collectionInvocationHandler = new CollectionInvocationHandler<T, Collection<E>>(collectionToProxy, collectionName, handler, otma);
         collectionInvocationHandler.setResolveObjectChangedEnabled(handler.isResolveObjectChangedEnabled());
 
-        return proxyInstantiator.instantiateProxy(collectionInvocationHandler);
+        return proxyCreator.instantiateProxy(collectionInvocationHandler);
     }
 
     /**
@@ -78,7 +68,7 @@ public class ProxyContextHandler {
         final MapInvocationHandler<T, Map<P, Q>> mapInvocationHandler = new MapInvocationHandler<T, Map<P, Q>>(collectionToProxy, collectionName, handler, otma);
         mapInvocationHandler.setResolveObjectChangedEnabled(handler.isResolveObjectChangedEnabled());
 
-        return proxyInstantiator.instantiateProxy(mapInvocationHandler);
+        return proxyCreator.instantiateProxy(mapInvocationHandler);
     }
 
 }

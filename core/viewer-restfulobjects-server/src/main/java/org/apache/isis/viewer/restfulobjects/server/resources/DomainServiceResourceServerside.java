@@ -18,14 +18,25 @@ package org.apache.isis.viewer.restfulobjects.server.resources;
 
 import java.io.InputStream;
 import java.util.List;
-import javax.ws.rs.*;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+
 import org.apache.isis.applib.annotation.NatureOfService;
 import org.apache.isis.applib.annotation.Where;
+import org.apache.isis.applib.services.command.Command;
 import org.apache.isis.core.commons.url.UrlEncodingUtils;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.facets.object.domainservice.DomainServiceFacet;
@@ -37,9 +48,10 @@ import org.apache.isis.viewer.restfulobjects.applib.client.RestfulResponse;
 import org.apache.isis.viewer.restfulobjects.applib.domainobjects.DomainServiceResource;
 import org.apache.isis.viewer.restfulobjects.rendering.Caching;
 import org.apache.isis.viewer.restfulobjects.rendering.Responses;
+import org.apache.isis.viewer.restfulobjects.rendering.RestfulObjectsApplicationException;
 import org.apache.isis.viewer.restfulobjects.rendering.domainobjects.DomainObjectReprRenderer;
 import org.apache.isis.viewer.restfulobjects.rendering.domainobjects.DomainServiceLinkTo;
-import org.apache.isis.viewer.restfulobjects.rendering.RestfulObjectsApplicationException;
+import org.apache.isis.viewer.restfulobjects.rendering.service.RepresentationService;
 import org.apache.isis.viewer.restfulobjects.rendering.service.conneg.PrettyPrinting;
 
 @Path("/services")
@@ -66,7 +78,7 @@ public class DomainServiceResourceServerside extends ResourceAbstract implements
     @Path("/")
     @Produces({ MediaType.APPLICATION_JSON, RestfulMediaType.APPLICATION_JSON_LIST, RestfulMediaType.APPLICATION_JSON_ERROR })
     public Response services() {
-        init(RepresentationType.LIST, Where.STANDALONE_TABLES);
+        init(RepresentationType.LIST, Where.STANDALONE_TABLES, RepresentationService.Intent.NOT_APPLICABLE);
 
         final List<ObjectAdapter> serviceAdapters =
                 Lists.newArrayList(
@@ -109,7 +121,7 @@ public class DomainServiceResourceServerside extends ResourceAbstract implements
     })
     @PrettyPrinting
     public Response service(@PathParam("serviceId") final String serviceId) {
-        init(RepresentationType.DOMAIN_OBJECT, Where.OBJECT_FORMS);
+        init(RepresentationType.DOMAIN_OBJECT, Where.OBJECT_FORMS, RepresentationService.Intent.ALREADY_PERSISTENT);
 
         final ObjectAdapter serviceAdapter = getServiceAdapter(serviceId);
 
@@ -150,10 +162,10 @@ public class DomainServiceResourceServerside extends ResourceAbstract implements
     })
     @PrettyPrinting
     public Response actionPrompt(@PathParam("serviceId") final String serviceId, @PathParam("actionId") final String actionId) {
-        init(RepresentationType.OBJECT_ACTION, Where.OBJECT_FORMS);
+        init(RepresentationType.OBJECT_ACTION, Where.OBJECT_FORMS, RepresentationService.Intent.ALREADY_PERSISTENT);
 
         final ObjectAdapter serviceAdapter = getServiceAdapter(serviceId);
-        final DomainResourceHelper helper = new DomainResourceHelper(getResourceContext(), serviceAdapter).using(new DomainServiceLinkTo());
+        final DomainResourceHelper helper = newDomainResourceHelper(serviceAdapter);
 
         return helper.actionPrompt(actionId);
     }
@@ -190,15 +202,15 @@ public class DomainServiceResourceServerside extends ResourceAbstract implements
             final @PathParam("actionId") String actionId,
             final @QueryParam("x-isis-querystring") String xIsisUrlEncodedQueryString) {
 
-
         final String urlUnencodedQueryString = UrlEncodingUtils.urlDecodeNullSafe(xIsisUrlEncodedQueryString != null? xIsisUrlEncodedQueryString: httpServletRequest.getQueryString());
-        init(RepresentationType.ACTION_RESULT, Where.STANDALONE_TABLES, urlUnencodedQueryString);
+        init(RepresentationType.ACTION_RESULT, Where.STANDALONE_TABLES, RepresentationService.Intent.NOT_APPLICABLE, urlUnencodedQueryString);
 
+        setCommandExecutor(Command.Executor.USER);
 
         final JsonRepresentation arguments = getResourceContext().getQueryStringAsJsonRepr();
         
         final ObjectAdapter serviceAdapter = getServiceAdapter(serviceId);
-        final DomainResourceHelper helper = new DomainResourceHelper(getResourceContext(), serviceAdapter).using(new DomainServiceLinkTo());
+        final DomainResourceHelper helper = newDomainResourceHelper(serviceAdapter);
 
         return helper.invokeActionQueryOnly(actionId, arguments);
     }
@@ -217,16 +229,17 @@ public class DomainServiceResourceServerside extends ResourceAbstract implements
             final @PathParam("serviceId") String serviceId,
             final @PathParam("actionId") String actionId,
             final InputStream body) {
-        init(RepresentationType.ACTION_RESULT, Where.STANDALONE_TABLES, body);
+        init(RepresentationType.ACTION_RESULT, Where.STANDALONE_TABLES, RepresentationService.Intent.NOT_APPLICABLE, body);
+
+        setCommandExecutor(Command.Executor.USER);
 
         final JsonRepresentation arguments = getResourceContext().getQueryStringAsJsonRepr();
         
         final ObjectAdapter serviceAdapter = getServiceAdapter(serviceId);
-        final DomainResourceHelper helper = new DomainResourceHelper(getResourceContext(), serviceAdapter).using(new DomainServiceLinkTo());
+        final DomainResourceHelper helper = newDomainResourceHelper(serviceAdapter);
 
         return helper.invokeActionIdempotent(actionId, arguments);
     }
-
 
     @Override
     @POST
@@ -238,12 +251,14 @@ public class DomainServiceResourceServerside extends ResourceAbstract implements
     })
     @PrettyPrinting
     public Response invokeAction(@PathParam("serviceId") final String serviceId, @PathParam("actionId") final String actionId, final InputStream body) {
-        init(RepresentationType.ACTION_RESULT, Where.STANDALONE_TABLES, body);
+        init(RepresentationType.ACTION_RESULT, Where.STANDALONE_TABLES, RepresentationService.Intent.NOT_APPLICABLE, body);
+
+        setCommandExecutor(Command.Executor.USER);
 
         final JsonRepresentation arguments = getResourceContext().getQueryStringAsJsonRepr();
         
         final ObjectAdapter serviceAdapter = getServiceAdapter(serviceId);
-        final DomainResourceHelper helper = new DomainResourceHelper(getResourceContext(), serviceAdapter).using(new DomainServiceLinkTo());
+        final DomainResourceHelper helper = newDomainResourceHelper(serviceAdapter);
 
         return helper.invokeAction(actionId, arguments);
     }
@@ -252,5 +267,12 @@ public class DomainServiceResourceServerside extends ResourceAbstract implements
     public Response deleteInvokeActionNotAllowed(@PathParam("serviceId") String serviceId, @PathParam("actionId") String actionId) {
         throw RestfulObjectsApplicationException.createWithMessage(RestfulResponse.HttpStatusCode.METHOD_NOT_ALLOWED, "Deleting an action invocation resource is not allowed.");
     }
+
+    private DomainResourceHelper newDomainResourceHelper(final ObjectAdapter serviceAdapter) {
+        return new DomainResourceHelper(getResourceContext(), serviceAdapter, new DomainServiceLinkTo());
+    }
+
+
+
 
 }

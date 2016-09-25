@@ -20,53 +20,43 @@
 package org.apache.isis.core.runtime.services;
 
 import java.util.List;
-import java.util.Map;
 import java.util.SortedMap;
 import java.util.SortedSet;
+
 import com.google.common.collect.Maps;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.isis.core.commons.config.InstallerAbstract;
-import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationBuilder;
-import org.apache.isis.core.runtime.system.DeploymentType;
 
-public class ServicesInstallerFromConfigurationAndAnnotation extends InstallerAbstract implements ServicesInstaller {
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
+import org.apache.isis.core.metamodel.util.DeweyOrderComparator;
+
+public class ServicesInstallerFromConfigurationAndAnnotation extends ServicesInstallerAbstract  {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServicesInstallerFromConfigurationAndAnnotation.class);
+
+    public static final String NAME = "configuration-and-annotation";
 
     private final ServiceInstantiator serviceInstantiator;
     private final ServicesInstallerFromConfiguration servicesInstallerFromConfiguration;
     private final ServicesInstallerFromAnnotation servicesInstallerFromAnnotation;
 
 
-    public ServicesInstallerFromConfigurationAndAnnotation() {
-        this(new ServiceInstantiator());
+    public ServicesInstallerFromConfigurationAndAnnotation(final IsisConfigurationDefault isisConfiguration) {
+        this(new ServiceInstantiator(), isisConfiguration);
     }
 
-    public ServicesInstallerFromConfigurationAndAnnotation(final ServiceInstantiator serviceInstantiator) {
-        super(ServicesInstaller.TYPE, "configuration-and-annotation");
+    public ServicesInstallerFromConfigurationAndAnnotation(
+            final ServiceInstantiator serviceInstantiator,
+            final IsisConfigurationDefault isisConfiguration) {
+        super(NAME, isisConfiguration);
 
         this.serviceInstantiator = serviceInstantiator;
-        servicesInstallerFromConfiguration = new ServicesInstallerFromConfiguration(serviceInstantiator);
-        servicesInstallerFromAnnotation = new ServicesInstallerFromAnnotation(serviceInstantiator);
+        servicesInstallerFromConfiguration = new ServicesInstallerFromConfiguration(serviceInstantiator,
+                isisConfiguration);
+        servicesInstallerFromAnnotation = new ServicesInstallerFromAnnotation(serviceInstantiator, isisConfiguration);
     }
 
-    public void setIgnoreFailures(boolean ignoreFailures) {
-        this.serviceInstantiator.setIgnoreFailures(ignoreFailures);
-    }
-
-    @Override
-    public void setConfigurationBuilder(IsisConfigurationBuilder isisConfigurationBuilder) {
-        servicesInstallerFromConfiguration.setConfigurationBuilder(isisConfigurationBuilder);
-        servicesInstallerFromAnnotation.setConfigurationBuilder(isisConfigurationBuilder);
-    }
-
-    @Override
-    public void setConfiguration(IsisConfiguration configuration) {
-        servicesInstallerFromConfiguration.setConfiguration(configuration);
-        servicesInstallerFromAnnotation.setConfiguration(configuration);
-    }
 
     public void init() {
         servicesInstallerFromConfiguration.init();
@@ -80,23 +70,19 @@ public class ServicesInstallerFromConfigurationAndAnnotation extends InstallerAb
 
     // //////////////////////////////////////
 
-    private Map<DeploymentType, List<Object>> servicesByDeploymentType = Maps.newHashMap();
+    private List<Object> serviceList;
 
     @Override
-    public List<Object> getServices(final DeploymentType deploymentType) {
-
+    public List<Object> getServices() {
         LOG.info("installing " + this.getClass().getName());
 
-        List<Object> serviceList = servicesByDeploymentType.get(deploymentType);
         if(serviceList == null) {
 
             final SortedMap<String,SortedSet<String>> positionedServices = Maps.newTreeMap(new DeweyOrderComparator());
-            servicesInstallerFromConfiguration.appendServices(deploymentType, positionedServices);
-            servicesInstallerFromAnnotation.appendServices(deploymentType, positionedServices);
+            servicesInstallerFromConfiguration.appendServices(positionedServices);
+            servicesInstallerFromAnnotation.appendServices(positionedServices);
 
             serviceList = ServicesInstallerUtils.instantiateServicesFrom(positionedServices, serviceInstantiator);
-
-            servicesByDeploymentType.put(deploymentType, serviceList);
         }
 
         return serviceList;

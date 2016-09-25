@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+
 <!--
   Licensed to the Apache Software Foundation (ASF) under one
   or more contributor license agreements.  See the NOTICE file
@@ -23,61 +23,12 @@
     <parent>
         <groupId>org.apache.isis.core</groupId>
         <artifactId>isis</artifactId>
-        <version>1.9.0-SNAPSHOT</version>
+        <version>1.14.0-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>isis-core-wrapper</artifactId>
 
-	<name>Isis Core Wrapper Service</name>
-	<description>Isis Core Wrapper Service</description>
-
-
-	<properties>
-        <siteBaseDir>..</siteBaseDir>
-		<relativeUrl>wrapper/</relativeUrl>
-	</properties>
-
-    <!-- used in Site generation for relative references. -->
-    <url>http://isis.apache.org/${relativeUrl}</url>
-
-    <reporting>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-project-info-reports-plugin</artifactId>
-                <inherited>false</inherited>
-                <configuration>
-                	<dependencyLocationsEnabled>false</dependencyLocationsEnabled>
-                </configuration>
-                <reportSets>
-                    <reportSet>
-                        <inherited>false</inherited>
-                        <reports>
-                            <report>dependencies</report>
-                            <report>dependency-convergence</report>
-                            <report>plugins</report>
-                            <report>summary</report>
-                        </reports>
-                    </reportSet>
-                </reportSets>
-            </plugin>
-        </plugins>
-    </reporting>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>asm</groupId>
-                <artifactId>asm</artifactId>
-                <version>3.3.1</version>
-            </dependency>
-            <dependency>
-                <groupId>cglib</groupId>
-                <artifactId>cglib-nodep</artifactId>
-                <version>2.2.2</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
+	<name>Apache Isis Wrapper Service</name>
 
 	<dependencies>
         <dependency>

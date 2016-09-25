@@ -20,18 +20,24 @@
 package org.apache.isis.core.metamodel.facets.properties.property;
 
 import java.lang.reflect.Method;
+import java.util.List;
+
 import org.jmock.Expectations;
 import org.jmock.auto.Mock;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+
 import org.apache.isis.applib.Identifier;
+import org.apache.isis.applib.services.i18n.TranslationService;
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
 import org.apache.isis.core.metamodel.facetapi.MethodRemover;
 import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessMethodContext;
 import org.apache.isis.core.metamodel.facets.FacetedMethod;
 import org.apache.isis.core.metamodel.facets.properties.property.mustsatisfy.MustSatisfySpecificationFacetForMustSatisfyAnnotationOnProperty;
 import org.apache.isis.core.metamodel.facets.propparam.specification.DomainObjectWithMustSatisfyAnnotations;
 import org.apache.isis.core.metamodel.facets.propparam.specification.DomainObjectWithoutMustSatisfyAnnotations;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 
 import static org.apache.isis.core.commons.matchers.IsisMatchers.anInstanceOf;
@@ -44,7 +50,15 @@ public class MustSatisfySpecificationFacetFactoryProcessPropertyTest {
     @Mock
     private MethodRemover mockMethodRemover;
     @Mock
-    private FacetedMethod mockFacetHolder;
+    private FacetedMethod mockFacetedMethod;
+
+    @Mock
+    private ServicesInjector mockServicesInjector;
+    @Mock
+    private IsisConfigurationDefault mockConfiguration;
+
+    @Mock
+    private TranslationService mockTranslationService;
 
     private Class<DomainObjectWithoutMustSatisfyAnnotations> domainObjectClassWithoutAnnotation;
     private Class<DomainObjectWithMustSatisfyAnnotations> domainObjectClassWithAnnotation;
@@ -56,19 +70,28 @@ public class MustSatisfySpecificationFacetFactoryProcessPropertyTest {
 
     @Before
     public void setUp() throws Exception {
+
+        context.checking(new Expectations() {{
+            allowing(mockServicesInjector).lookupService(TranslationService.class);
+            will(returnValue(mockTranslationService));
+
+            allowing(mockServicesInjector).getConfigurationServiceInternal();
+            will(returnValue(mockConfiguration));
+
+            allowing(mockServicesInjector).injectServicesInto(with(any(List.class)));
+
+            allowing(mockFacetedMethod).getIdentifier();
+            will(returnValue(Identifier.actionIdentifier(Customer.class, "foo")));
+
+        }});
+
         domainObjectClassWithoutAnnotation = DomainObjectWithoutMustSatisfyAnnotations.class;
         domainObjectClassWithAnnotation = DomainObjectWithMustSatisfyAnnotations.class;
         firstNameMethodWithout = domainObjectClassWithoutAnnotation.getMethod("getFirstName");
         firstNameMethodWith = domainObjectClassWithAnnotation.getMethod("getFirstName");
 
-        context.checking(new Expectations() {
-            {
-                allowing(mockFacetHolder).getIdentifier();
-                will(returnValue(Identifier.actionIdentifier(Customer.class, "foo")));
-            }
-        });
-
         facetFactory = new PropertyAnnotationFacetFactory();
+        facetFactory.setServicesInjector(mockServicesInjector);
     }
 
     @Test
@@ -76,10 +99,10 @@ public class MustSatisfySpecificationFacetFactoryProcessPropertyTest {
 
         context.checking(new Expectations() {
             {
-                oneOf(mockFacetHolder).addFacet(with(anInstanceOf(MustSatisfySpecificationFacetForMustSatisfyAnnotationOnProperty.class)));
+                oneOf(mockFacetedMethod).addFacet(with(anInstanceOf(MustSatisfySpecificationFacetForMustSatisfyAnnotationOnProperty.class)));
             }
         });
-        facetFactory.processMustSatisfy(new ProcessMethodContext(domainObjectClassWithAnnotation.getClass(), null, null, firstNameMethodWith, mockMethodRemover, mockFacetHolder));
+        facetFactory.processMustSatisfy(new ProcessMethodContext(domainObjectClassWithAnnotation.getClass(), null, null, firstNameMethodWith, mockMethodRemover, mockFacetedMethod));
     }
 
     @Test
@@ -87,10 +110,10 @@ public class MustSatisfySpecificationFacetFactoryProcessPropertyTest {
 
         context.checking(new Expectations() {
             {
-                never(mockFacetHolder).addFacet(with(anInstanceOf(MustSatisfySpecificationFacetForMustSatisfyAnnotationOnProperty.class)));
+                never(mockFacetedMethod).addFacet(with(anInstanceOf(MustSatisfySpecificationFacetForMustSatisfyAnnotationOnProperty.class)));
             }
         });
-        facetFactory.processMustSatisfy(new ProcessMethodContext(domainObjectClassWithAnnotation.getClass(), null, null, firstNameMethodWithout, mockMethodRemover, mockFacetHolder));
+        facetFactory.processMustSatisfy(new ProcessMethodContext(domainObjectClassWithAnnotation.getClass(), null, null, firstNameMethodWithout, mockMethodRemover, mockFacetedMethod));
     }
 
 }

@@ -21,11 +21,11 @@ package org.apache.isis.core.metamodel.facets.object.bounded;
 
 import org.apache.isis.applib.marker.Bounded;
 import org.apache.isis.core.metamodel.facetapi.Facet;
-import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessClassContext;
-import org.apache.isis.core.metamodel.facets.object.choices.boundedmarkerifc.ChoicesFacetFromBoundedMarkerInterfaceFactory;
-import org.apache.isis.core.metamodel.facets.object.choices.ChoicesFacetFromBoundedAbstract;
-import org.apache.isis.core.metamodel.facets.objectvalue.choices.ChoicesFacet;
 import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryTest;
+import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessClassContext;
+import org.apache.isis.core.metamodel.facets.object.choices.ChoicesFacetFromBoundedAbstract;
+import org.apache.isis.core.metamodel.facets.object.choices.boundedmarkerifc.ChoicesFacetFromBoundedMarkerInterfaceFactory;
+import org.apache.isis.core.metamodel.facets.objectvalue.choices.ChoicesFacet;
 
 public class ChoicesFacetFromBoundedMarkerInterfaceFactoryTest extends AbstractFacetFactoryTest {
 
@@ -36,6 +36,7 @@ public class ChoicesFacetFromBoundedMarkerInterfaceFactoryTest extends AbstractF
         super.setUp();
 
         facetFactory = new ChoicesFacetFromBoundedMarkerInterfaceFactory();
+        facetFactory.setServicesInjector(stubServicesInjector);
     }
 
     @Override

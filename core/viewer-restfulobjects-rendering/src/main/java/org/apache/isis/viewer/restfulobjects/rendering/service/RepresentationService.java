@@ -22,6 +22,10 @@ import org.apache.isis.applib.annotation.Programmatic;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.viewer.restfulobjects.rendering.RendererContext;
 import org.apache.isis.viewer.restfulobjects.rendering.RendererContext2;
+import org.apache.isis.viewer.restfulobjects.rendering.RendererContext3;
+import org.apache.isis.viewer.restfulobjects.rendering.RendererContext4;
+import org.apache.isis.viewer.restfulobjects.rendering.RendererContext5;
+import org.apache.isis.viewer.restfulobjects.rendering.RendererContext6;
 import org.apache.isis.viewer.restfulobjects.rendering.domainobjects.ActionResultReprRenderer;
 import org.apache.isis.viewer.restfulobjects.rendering.domainobjects.MemberReprMode;
 import org.apache.isis.viewer.restfulobjects.rendering.domainobjects.ObjectAdapterLinkTo;
@@ -40,10 +44,39 @@ import org.apache.isis.viewer.restfulobjects.rendering.domainobjects.ObjectAndPr
  */
 public interface RepresentationService {
 
+    /**
+     * As returned by {@link RendererContext6#getIntent()}, applies only to the representation of
+     * domain objects.
+     */
+    enum Intent {
+        /**
+         * object just created, ie return a 201
+         */
+        JUST_CREATED,
+        /**
+         * object already persistent, ie return a 200
+         */
+        ALREADY_PERSISTENT,
+        /**
+         * representation is not of a domain object, so does not apply.
+         */
+        NOT_APPLICABLE
+    }
+
     @Programmatic
     Response objectRepresentation(
             Context resourceContext,
             ObjectAdapter objectAdapter);
+
+    /**
+     * @deprecated - use {@link #objectRepresentation(Context, ObjectAdapter)}.
+     */
+    @Deprecated
+    @Programmatic
+    Response objectRepresentation(
+            Context resourceContext,
+            ObjectAdapter objectAdapter,
+            Intent intent);
 
     @Programmatic
     Response propertyDetails(
@@ -68,10 +101,17 @@ public interface RepresentationService {
             ObjectAndActionInvocation objectAndActionInvocation,
             ActionResultReprRenderer.SelfLink selfLink);
 
-    public static interface Context extends RendererContext {
+    interface Context extends RendererContext {
         ObjectAdapterLinkTo getAdapterLinkTo();
     }
-    public static interface Context2 extends Context, RendererContext2 {
-        ObjectAdapterLinkTo getAdapterLinkTo();
+    interface Context2 extends Context, RendererContext2 {
+    }
+    interface Context3 extends Context2, RendererContext3 {
+    }
+    interface Context4 extends Context3, RendererContext4 {
+    }
+    interface Context5 extends Context4, RendererContext5 {
+    }
+    interface Context6 extends Context5, RendererContext6 {
     }
 }

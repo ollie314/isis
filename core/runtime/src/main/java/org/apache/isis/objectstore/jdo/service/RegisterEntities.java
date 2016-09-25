@@ -18,24 +18,29 @@
  */
 package org.apache.isis.objectstore.jdo.service;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
+
 import javax.jdo.annotations.PersistenceCapable;
+
 import com.google.common.base.Function;
+import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+
 import org.reflections.Reflections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.isis.applib.annotation.Hidden;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
-import org.apache.isis.core.runtime.system.context.IsisContext;
 
-@Hidden
+import org.apache.isis.applib.AppManifest;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
+
 public class RegisterEntities {
 
     @SuppressWarnings("unused")
@@ -45,41 +50,80 @@ public class RegisterEntities {
 
     // //////////////////////////////////////
 
-    private String packagePrefixes;
 
-    @PostConstruct
-    public void init(Map<String,String> configuration) {
-        packagePrefixes = configuration.get(PACKAGE_PREFIX_KEY);
-        if(Strings.isNullOrEmpty(packagePrefixes)) {
-            throw new IllegalStateException("Could not locate '" + PACKAGE_PREFIX_KEY + "' key in property files - aborting");
+    //region > entityTypes
+    private final Set<String> entityTypes = Sets.newLinkedHashSet();
+    private final SpecificationLoader specificationLoader;
+
+    public Set<String> getEntityTypes() {
+        return entityTypes;
+    }
+    //endregion
+
+    public RegisterEntities(final Map<String, String> configuration, final SpecificationLoader specificationLoader) {
+        this.specificationLoader = specificationLoader;
+
+        Set<Class<?>> persistenceCapableTypes = AppManifest.Registry.instance().getPersistenceCapableTypes();
+
+        if(persistenceCapableTypes == null) {
+            persistenceCapableTypes = searchForPersistenceCapables(configuration);
         }
-        
-        registerAllPersistenceCapables();
+
+        final List<String> classNamesNotEnhanced = Lists.newArrayList();
+        for (Class<?> persistenceCapableType : persistenceCapableTypes) {
+            if(ignore(persistenceCapableType)) {
+                continue;
+            }
+            if(!org.datanucleus.enhancement.Persistable.class.isAssignableFrom(persistenceCapableType)) {
+                classNamesNotEnhanced.add(persistenceCapableType.getCanonicalName());
+            }
+            this.entityTypes.add(persistenceCapableType.getCanonicalName());
+        }
+
+        if(!classNamesNotEnhanced.isEmpty()) {
+            final String classNamesNotEnhancedStr = Joiner.on("\n* ").join(classNamesNotEnhanced);
+            throw new IllegalStateException("Non-enhanced @PersistenceCapable classes found, will abort.  The classes in error are:\n\n* " + classNamesNotEnhancedStr + "\n\nDid the DataNucleus enhancer run correctly?\n");
+        }
     }
 
-    @PreDestroy
-    public void shutdown() {
-    }
+    /**
+     * only called if no appManifest
+     */
+    Set<Class<?>> searchForPersistenceCapables(final Map<String, String> configuration) {
 
-    private void registerAllPersistenceCapables() {
+        final String packagePrefixes = lookupPackagePrefixes(configuration);
 
-        for (final String packagePrefix : Iterables.transform(Splitter.on(",").split(packagePrefixes), trim())) {
-            Reflections reflections = new Reflections(packagePrefix);
-            
-            Set<Class<?>> entityTypes = 
+        final Set<Class<?>> persistenceCapableTypes = Sets.newLinkedHashSet();
+        final List<String> domPackages = parseDomPackages(packagePrefixes);
+        for (final String packageName : domPackages) {
+            Reflections reflections = new Reflections(packageName);
+            final Set<Class<?>> entityTypesInPackage =
                     reflections.getTypesAnnotatedWith(PersistenceCapable.class);
-            
-            if(noEntitiesIn(entityTypes)) {
-                throw new IllegalStateException("Could not locate any @PersistenceCapable entities in package " + packagePrefix);
+
+            if(!entitiesIn(entityTypesInPackage)) {
+                throw new IllegalArgumentException(String.format(
+                        "Bad configuration.\n\nCould not locate any @PersistenceCapable entities in package '%s'\n" +
+                                "Check value of '%s' key in WEB-INF/*.properties\n",
+                        packageName,
+                        PACKAGE_PREFIX_KEY));
             }
-            for (Class<?> entityType : entityTypes) {
-                if(ignore(entityType)) {
-                    // ignore (probably a testing class)
-                    continue;
-                }
-                getSpecificationLoader().loadSpecification(entityType);
-            }
+            persistenceCapableTypes.addAll(entityTypesInPackage);
         }
+        return persistenceCapableTypes;
+    }
+
+    private String lookupPackagePrefixes(final Map<String, String> configuration) {
+        final String packagePrefixes = configuration.get(PACKAGE_PREFIX_KEY);
+        if(Strings.isNullOrEmpty(packagePrefixes)) {
+            throw new IllegalArgumentException(String.format(
+                    "Could not locate '%s' key in property files - aborting",
+                    PACKAGE_PREFIX_KEY));
+        }
+        return packagePrefixes;
+    }
+
+    private static List<String> parseDomPackages(String packagePrefixes) {
+        return Collections.unmodifiableList(Lists.newArrayList(Iterables.transform(Splitter.on(",").split(packagePrefixes), trim())));
     }
 
     private static boolean ignore(final Class<?> entityType) {
@@ -88,8 +132,7 @@ public class RegisterEntities {
                 return true;
             }
             final PersistenceCapable persistenceCapable = entityType.getAnnotation(PersistenceCapable.class);
-            final boolean hasPersistenceCapable = persistenceCapable != null;
-            return !hasPersistenceCapable; // don't ignore if has @PersistenceCapable
+            return persistenceCapable == null; // ignore if doesn't have @PersistenceCapable
         } catch (NoClassDefFoundError ex) {
             return true;
         }
@@ -104,29 +147,27 @@ public class RegisterEntities {
         };
     }
 
-    /**
-     * {@link Reflections} seems to return a set with 1 null element if none can be found.
-     */
-    private static boolean noEntitiesIn(Set<Class<?>> entityTypes) {
-        return Iterables.filter(entityTypes, nullClass()).iterator().hasNext();
+    private static boolean entitiesIn(Set<Class<?>> entityTypes) {
+        return Iterables.filter(entityTypes, notNullClass()).iterator().hasNext();
     }
 
-    private static Predicate<Class<?>> nullClass() {
-        return new Predicate<Class<?>>() {
-
+    /**
+     * {@link Reflections} seems to return a set with 1 null element if none can be found, so we ignore these.
+     */
+    private static <T> Predicate<T> notNullClass() {
+        return new Predicate<T>() {
             @Override
-            public boolean apply(Class<?> input) {
-                return input == null;
+            public boolean apply(T input) {
+                return input != null;
             }
         };
     }
 
     // //////////////////////////////////////
 
-    SpecificationLoaderSpi getSpecificationLoader() {
-        return IsisContext.getSpecificationLoader();
+    SpecificationLoader getSpecificationLoader() {
+        return specificationLoader;
     }
 
 
-    
 }

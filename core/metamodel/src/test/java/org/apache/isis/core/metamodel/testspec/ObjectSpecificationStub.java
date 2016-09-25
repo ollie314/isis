@@ -27,24 +27,21 @@ import com.google.common.collect.Lists;
 
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.filter.Filter;
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
-import org.apache.isis.core.commons.debug.DebugBuilder;
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
 import org.apache.isis.core.commons.exceptions.IsisException;
-import org.apache.isis.core.commons.factory.InstanceUtil;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.consent.InteractionResult;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetHolderImpl;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facets.object.immutable.ImmutableFacet;
 import org.apache.isis.core.metamodel.facets.object.objectspecid.ObjectSpecIdFacet;
 import org.apache.isis.core.metamodel.interactions.ObjectTitleContext;
 import org.apache.isis.core.metamodel.interactions.ObjectValidityContext;
-import org.apache.isis.core.metamodel.runtimecontext.RuntimeContext;
-import org.apache.isis.core.metamodel.runtimecontext.noruntime.RuntimeContextNoRuntime;
+import org.apache.isis.core.metamodel.services.configinternal.ConfigurationServiceInternal;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.spec.ActionType;
 import org.apache.isis.core.metamodel.spec.ObjectSpecId;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
@@ -68,13 +65,14 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
     private ObjectSpecId specId;
 
     private Persistability persistable;
-    private boolean isEncodeable;
 
-    private RuntimeContextNoRuntime runtimeContext;
+    private ServicesInjector servicesInjector;
 
     public ObjectSpecificationStub(final Class<?> type) {
         this(type.getName());
-        runtimeContext = new RuntimeContextNoRuntime();
+        IsisConfigurationDefault stubConfiguration = new IsisConfigurationDefault(null);
+        this.servicesInjector = new ServicesInjector(Collections.emptyList(), stubConfiguration);
+        servicesInjector.addFallbackIfRequired(ConfigurationServiceInternal.class, stubConfiguration);
     }
 
     @Override
@@ -98,36 +96,8 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
     }
 
     @Override
-    public void clearDirty(final ObjectAdapter object) {
-    }
-
-    @Override
     protected Object clone() throws CloneNotSupportedException {
         return super.clone();
-    }
-
-    public void debugData(final DebugBuilder debug) {
-    }
-
-    public String debugInterface() {
-        return null;
-    }
-
-    public String debugTitle() {
-        return "";
-    }
-
-    public ObjectAction getClassAction(final ActionType type, final String name, final ObjectSpecification[] parameters) {
-        return null;
-    }
-
-    @Override
-    public List<ObjectAction> getServiceActionsReturning(final List<ActionType> types) {
-        return null;
-    }
-
-    public int getFeatures() {
-        return 0;
     }
 
     @Override
@@ -270,12 +240,14 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
     }
 
     @Override
-    public String getTitle(final ObjectAdapter targetAdapter, final Localization localization) {
-        return getTitle(null, targetAdapter, localization);
+    public String getTitle(final ObjectAdapter targetAdapter) {
+        return getTitle(null, targetAdapter);
     }
 
     @Override
-    public String getTitle(final ObjectAdapter contextAdapterIfAny, final ObjectAdapter targetAdapter, final Localization localization) {
+    public String getTitle(
+            final ObjectAdapter contextAdapterIfAny,
+            final ObjectAdapter targetAdapter) {
         return title;
     }
 
@@ -289,14 +261,6 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
         return Collections.emptyList();
     }
 
-    public void introspect() {
-    }
-
-    @Override
-    public boolean isDirty(final ObjectAdapter object) {
-        return false;
-    }
-
     @Override
     public boolean isOfType(final ObjectSpecification cls) {
         return cls == this;
@@ -304,7 +268,7 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
 
     @Override
     public boolean isEncodeable() {
-        return isEncodeable;
+        return false;
     }
 
     @Override
@@ -328,39 +292,8 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
     }
 
     @Override
-    public void markDirty(final ObjectAdapter object) {
-    }
-
-    public Object newInstance() {
-        return InstanceUtil.createInstance(name);
-    }
-
-    @Override
     public Persistability persistability() {
         return persistable;
-    }
-
-    public void setupAction(final ObjectAction action) {
-        this.action = action;
-    }
-
-    public void setupFields(final List<ObjectAssociation> fields) {
-        this.fields = fields;
-    }
-
-    public void setupIsEncodeable() {
-        isEncodeable = true;
-    }
-
-    public void setupSubclasses(final List<ObjectSpecification> subclasses) {
-        this.subclasses = subclasses;
-    }
-
-    public void setupHasNoIdentity(final boolean hasNoIdentity) {
-    }
-
-    public void setupTitle(final String title) {
-        this.title = title;
     }
 
     @Override
@@ -374,7 +307,7 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
     }
 
     @Override
-    public Consent isValid(final ObjectAdapter transientObject) {
+    public Consent isValid(final ObjectAdapter targetAdapter, final InteractionInitiatedBy interactionInitiatedBy) {
         return null;
     }
 
@@ -388,25 +321,7 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
         return Identifier.classIdentifier(name);
     }
 
-    @Override
-    public Object createObject() {
-        try {
-            final Class<?> cls = Class.forName(name);
-            return cls.newInstance();
-        } catch (final ClassNotFoundException e) {
-            throw new IsisException(e);
-        } catch (final InstantiationException e) {
-            throw new IsisException(e);
-        } catch (final IllegalAccessException e) {
-            throw new IsisException(e);
-        }
-    }
-
-    @Override
-    public ObjectAdapter initialize(final ObjectAdapter objectAdapter) {
-        return objectAdapter;
-    }
-
+    // TODO: not used
     public void setupPersistable(final Persistability persistable) {
         this.persistable = persistable;
     }
@@ -432,40 +347,27 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
     }
 
     @Override
-    public ObjectValidityContext createValidityInteractionContext(final DeploymentCategory deploymentCategory, final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter targetObjectAdapter) {
+    public ObjectValidityContext createValidityInteractionContext(
+            final ObjectAdapter targetAdapter, final InteractionInitiatedBy interactionInitiatedBy) {
         return null;
     }
 
     @Override
-    public ObjectTitleContext createTitleInteractionContext(final AuthenticationSession session, final InteractionInvocationMethod invocationMethod, final ObjectAdapter targetObjectAdapter) {
+    public ObjectTitleContext createTitleInteractionContext(final AuthenticationSession session, final InteractionInitiatedBy invocationMethod, final ObjectAdapter targetObjectAdapter) {
         return null;
     }
 
     @Override
-    public InteractionResult isValidResult(final ObjectAdapter transientObject) {
+    public InteractionResult isValidResult(
+            final ObjectAdapter targetAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         return null;
     }
 
-    // /////////////////////////////////////////////////////////////
-    // getInstance
-    // /////////////////////////////////////////////////////////////
-
-    @Override
-    public ObjectAdapter getInstance(final ObjectAdapter adapter) {
-        return adapter;
-    }
-
-    public RuntimeContext getRuntimeContext() {
-        return runtimeContext;
-    }
 
     // /////////////////////////////////////////////////////////////
     // introspection
     // /////////////////////////////////////////////////////////////
-
-    @Override
-    public void markAsService() {
-    }
 
     @Override
     public List<ObjectAction> getObjectActions(final Contributed contributed) {
@@ -503,6 +405,10 @@ public class ObjectSpecificationStub extends FacetHolderImpl implements ObjectSp
         return false;
     }
 
+    @Override
+    public boolean isMixin() {
+        return false;
+    }
 
 
     @Override

@@ -23,12 +23,14 @@ import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+
 import org.jmock.Expectations;
 import org.jmock.auto.Mock;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
 import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.annotation.Action;
 import org.apache.isis.applib.annotation.ActionInteraction;
@@ -50,6 +52,9 @@ import org.apache.isis.applib.services.eventbus.ActionDomainEvent;
 import org.apache.isis.applib.services.eventbus.ActionInteractionEvent;
 import org.apache.isis.applib.services.eventbus.ActionInvokedEvent;
 import org.apache.isis.applib.services.publish.EventPayload;
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategoryProvider;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryJUnit4TestCase;
 import org.apache.isis.core.metamodel.facets.FacetFactory.ProcessMethodContext;
@@ -79,7 +84,7 @@ import org.apache.isis.core.metamodel.facets.actions.bulk.BulkFacet;
 import org.apache.isis.core.metamodel.facets.actions.command.CommandFacet;
 import org.apache.isis.core.metamodel.facets.actions.prototype.PrototypeFacet;
 import org.apache.isis.core.metamodel.facets.actions.publish.PublishedActionFacet;
-import org.apache.isis.core.metamodel.facets.actions.publish.PublishedActionFacetAbstract;
+import org.apache.isis.core.metamodel.facets.actions.publish.PublishedActionPayloadFactoryDefault;
 import org.apache.isis.core.metamodel.facets.actions.semantics.ActionSemanticsFacet;
 import org.apache.isis.core.metamodel.facets.actions.semantics.ActionSemanticsFacetAbstract;
 import org.apache.isis.core.metamodel.facets.all.hide.HiddenFacet;
@@ -88,7 +93,6 @@ import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import static org.apache.isis.core.commons.matchers.IsisMatchers.classEqualTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
@@ -112,10 +116,10 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
     void allowingLoadSpecificationRequestsFor(final Class<?> cls, final Class<?> returnType) {
         context.checking(new Expectations() {{
-            allowing(mockSpecificationLoaderSpi).loadSpecification(cls);
+            allowing(mockSpecificationLoader).loadSpecification(cls);
             will(returnValue(mockTypeSpec));
 
-            allowing(mockSpecificationLoaderSpi).loadSpecification(returnType);
+            allowing(mockSpecificationLoader).loadSpecification(returnType);
             will(returnValue(mockReturnTypeSpec));
         }});
     }
@@ -123,10 +127,25 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
     @Before
     public void setUp() throws Exception {
         facetFactory = new ActionAnnotationFacetFactory();
-        facetFactory.setConfiguration(mockConfiguration);
-        facetFactory.setSpecificationLookup(mockSpecificationLoaderSpi);
+
+        context.checking(new Expectations() {{
+            allowing(mockServicesInjector).lookupService(AuthenticationSessionProvider.class);
+            will(returnValue(mockAuthenticationSessionProvider));
+
+            allowing(mockServicesInjector).getConfigurationServiceInternal();
+            will(returnValue(mockConfiguration));
+
+            allowing(mockServicesInjector).lookupService(DeploymentCategoryProvider.class);
+            will(returnValue(mockDeploymentCategoryProvider));
+
+            allowing(mockDeploymentCategoryProvider).getDeploymentCategory();
+            will(returnValue(DeploymentCategory.PRODUCTION));
+
+        }});
 
         actionMethod = findMethod(Customer.class, "someAction");
+
+        facetFactory.setServicesInjector(mockServicesInjector);
     }
 
     @After
@@ -160,13 +179,16 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             class Customer {
 
-                class SomeActionInvoked extends ActionInvokedEvent<Customer> {
-                    public SomeActionInvoked(final Customer source, final Identifier identifier, final Object... arguments) {
+                class SomeActionInvokedDomainEvent extends ActionInvokedEvent<Customer> {
+                    public SomeActionInvokedDomainEvent(
+                            final Customer source,
+                            final Identifier identifier,
+                            final Object... arguments) {
                         super(source, identifier, arguments);
                     }
                 }
 
-                @PostsActionInvokedEvent(Customer.SomeActionInvoked.class)
+                @PostsActionInvokedEvent(SomeActionInvokedDomainEvent.class)
                 public void someAction() {
                 }
             }
@@ -178,6 +200,12 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
             // expect
             allowingLoadSpecificationRequestsFor(cls, actionMethod.getReturnType());
             expectRemoveMethod(actionMethod);
+
+            context.checking(new Expectations() {{
+                allowing(mockConfiguration).getBoolean("isis.reflector.facet.actionAnnotation.domainEvent.postForDefault", true);
+                will(returnValue(true));
+            }});
+
 
             // when
             final ProcessMethodContext processMethodContext = new ProcessMethodContext(cls, null, null, actionMethod, mockMethodRemover, facetedMethod);
@@ -194,7 +222,7 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
             Assert.assertNotNull(invocationFacet);
             Assert.assertTrue(invocationFacet instanceof ActionInvocationFacetForPostsActionInvokedEventAnnotation);
             final ActionInvocationFacetForPostsActionInvokedEventAnnotation invocationFacetImpl = (ActionInvocationFacetForPostsActionInvokedEventAnnotation) invocationFacet;
-            assertThat(invocationFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvoked.class));
+            assertThat(invocationFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvokedDomainEvent.class));
         }
 
         @Test
@@ -202,13 +230,16 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             class Customer {
 
-                class SomeActionInvoked extends ActionInteractionEvent<Customer> {
-                    public SomeActionInvoked(final Customer source, final Identifier identifier, final Object... arguments) {
+                class SomeActionInvokedDomainEvent extends ActionInteractionEvent<Customer> {
+                    public SomeActionInvokedDomainEvent(
+                            final Customer source,
+                            final Identifier identifier,
+                            final Object... arguments) {
                         super(source, identifier, arguments);
                     }
                 }
 
-                @ActionInteraction(Customer.SomeActionInvoked.class)
+                @ActionInteraction(SomeActionInvokedDomainEvent.class)
                 public void someAction() {
                 }
             }
@@ -230,13 +261,13 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
             Assert.assertNotNull(domainEventFacet);
             Assert.assertTrue(domainEventFacet instanceof ActionDomainEventFacetForActionInteractionAnnotation);
             final ActionDomainEventFacetForActionInteractionAnnotation domainEventFacetImpl = (ActionDomainEventFacetForActionInteractionAnnotation) domainEventFacet;
-            assertThat(domainEventFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvoked.class));
+            assertThat(domainEventFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvokedDomainEvent.class));
 
             final Facet invocationFacet = facetedMethod.getFacet(ActionInvocationFacet.class);
             Assert.assertNotNull(invocationFacet);
             Assert.assertTrue(invocationFacet instanceof ActionInvocationFacetForDomainEventFromActionInteractionAnnotation);
             final ActionInvocationFacetForDomainEventFromActionInteractionAnnotation invocationFacetImpl = (ActionInvocationFacetForDomainEventFromActionInteractionAnnotation) invocationFacet;
-            assertThat(invocationFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvoked.class));
+            assertThat(invocationFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvokedDomainEvent.class));
         }
 
         @Test
@@ -244,13 +275,16 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             class Customer {
 
-                class SomeActionInvoked extends ActionDomainEvent<Customer> {
-                    public SomeActionInvoked(final Customer source, final Identifier identifier, final Object... arguments) {
+                class SomeActionInvokedDomainEvent extends ActionDomainEvent<Customer> {
+                    public SomeActionInvokedDomainEvent(
+                            final Customer source,
+                            final Identifier identifier,
+                            final Object... arguments) {
                         super(source, identifier, arguments);
                     }
                 }
 
-                @Action(domainEvent=Customer.SomeActionInvoked.class)
+                @Action(domainEvent= SomeActionInvokedDomainEvent.class)
                 public void someAction() {
                 }
             }
@@ -272,13 +306,13 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
             Assert.assertNotNull(domainEventFacet);
             Assert.assertTrue(domainEventFacet instanceof ActionDomainEventFacetForActionAnnotation);
             final ActionDomainEventFacetForActionAnnotation domainEventFacetImpl = (ActionDomainEventFacetForActionAnnotation) domainEventFacet;
-            assertThat(domainEventFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvoked.class));
+            assertThat(domainEventFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvokedDomainEvent.class));
 
             final Facet invocationFacet = facetedMethod.getFacet(ActionInvocationFacet.class);
             Assert.assertNotNull(invocationFacet);
             Assert.assertTrue(invocationFacet instanceof ActionInvocationFacetForDomainEventFromActionAnnotation);
             final ActionInvocationFacetForDomainEventFromActionAnnotation invocationFacetImpl = (ActionInvocationFacetForDomainEventFromActionAnnotation) invocationFacet;
-            assertThat(invocationFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvoked.class));
+            assertThat(invocationFacetImpl.getEventType(), classEqualTo(Customer.SomeActionInvokedDomainEvent.class));
         }
 
         @Test
@@ -296,6 +330,12 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
             // expect
             allowingLoadSpecificationRequestsFor(cls, actionMethod.getReturnType());
             expectRemoveMethod(actionMethod);
+
+            context.checking(new Expectations() {{
+                allowing(mockConfiguration).getBoolean("isis.reflector.facet.actionAnnotation.domainEvent.postForDefault", true);
+                will(returnValue(true));
+            }});
+
 
             // when
             final ProcessMethodContext processMethodContext = new ProcessMethodContext(cls, null, null, actionMethod, mockMethodRemover, facetedMethod);
@@ -801,12 +841,12 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             // given
             allowingCommandConfigurationToReturn("ignoreQueryOnly");
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             facetedMethod.addFacet(new ActionSemanticsFacetAbstract(Of.SAFE, facetedMethod) {});
 
             // when
-            facetFactory.processCommand(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processCommand(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
             // then
             final Facet facet = facetedMethod.getFacet(CommandFacet.class);
@@ -818,12 +858,12 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             // given
             allowingCommandConfigurationToReturn("ignoreQueryOnly");
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             facetedMethod.addFacet(new ActionSemanticsFacetAbstract(Of.IDEMPOTENT, facetedMethod) {});
 
             // when
-            facetFactory.processCommand(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processCommand(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
             // then
             final Facet facet = facetedMethod.getFacet(CommandFacet.class);
@@ -839,10 +879,10 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             // given
             allowingCommandConfigurationToReturn("ignoreQueryOnly");
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             // when
-            facetFactory.processCommand(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processCommand(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
         }
 
         @Test
@@ -850,10 +890,10 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             // given
             allowingCommandConfigurationToReturn("none");
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             // when
-            facetFactory.processCommand(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processCommand(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
             // then
             final Facet facet = facetedMethod.getFacet(PublishedActionFacet.class);
@@ -864,12 +904,12 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
         public void given_noAnnotation_and_configurationSetToAll_thenFacetAdded() {
 
             // given
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             allowingCommandConfigurationToReturn("all");
 
             // when
-            facetFactory.processCommand(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processCommand(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
             // then
             final Facet facet = facetedMethod.getFacet(CommandFacet.class);
@@ -1104,12 +1144,12 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             // given
             allowingPublishingConfigurationToReturn("ignoreQueryOnly");
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             facetedMethod.addFacet(new ActionSemanticsFacetAbstract(Of.SAFE, facetedMethod) {});
 
             // when
-            facetFactory.processPublishing(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processPublishing(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
             // then
             final Facet facet = facetedMethod.getFacet(PublishedActionFacet.class);
@@ -1121,19 +1161,19 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             // given
             allowingPublishingConfigurationToReturn("ignoreQueryOnly");
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             facetedMethod.addFacet(new ActionSemanticsFacetAbstract(Of.IDEMPOTENT, facetedMethod) {});
 
             // when
-            facetFactory.processPublishing(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processPublishing(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
             // then
             final Facet facet = facetedMethod.getFacet(PublishedActionFacet.class);
             assertNotNull(facet);
             final PublishedActionFacetFromConfiguration facetImpl = (PublishedActionFacetFromConfiguration) facet;
             final PublishedAction.PayloadFactory payloadFactory = facetImpl.value();
-            assertThat(payloadFactory, is(nullValue()));
+            assertThat(payloadFactory, is(instanceOf(PublishedActionPayloadFactoryDefault.class)));
         }
 
         @Test(expected=IllegalStateException.class)
@@ -1141,10 +1181,10 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             // given
             allowingPublishingConfigurationToReturn("ignoreQueryOnly");
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             // when
-            facetFactory.processPublishing(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processPublishing(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
         }
 
@@ -1153,10 +1193,10 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             // given
             allowingPublishingConfigurationToReturn("none");
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             // when
-            facetFactory.processPublishing(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processPublishing(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
             // then
             final Facet facet = facetedMethod.getFacet(PublishedActionFacet.class);
@@ -1170,12 +1210,12 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
         public void given_noAnnotation_and_configurationSetToAll_thenFacetAdded() {
 
             // given
-            final Method actionMethod = findMethod(Customer.class, "someAction");
+            final Method actionMethod = findMethod(ActionAnnotationFacetFactoryTest.Customer.class, "someAction");
 
             allowingPublishingConfigurationToReturn("all");
 
             // when
-            facetFactory.processPublishing(new ProcessMethodContext(Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
+            facetFactory.processPublishing(new ProcessMethodContext(ActionAnnotationFacetFactoryTest.Customer.class, null, null, actionMethod, mockMethodRemover, facetedMethod));
 
             // then
             final Facet facet = facetedMethod.getFacet(PublishedActionFacet.class);
@@ -1231,9 +1271,9 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
             assertNotNull(facet);
             final PublishedActionFacetForActionAnnotation facetImpl = (PublishedActionFacetForActionAnnotation) facet;
             final PublishedAction.PayloadFactory payloadFactory = facetImpl.value();
-            assertThat(payloadFactory, instanceOf(PublishedActionFacetAbstract.LegacyAdapter.class));
+            assertThat(payloadFactory, instanceOf(PublishedActionPayloadFactoryDefault.class));
 
-            final PublishedActionFacetAbstract.LegacyAdapter legacyAdapter = (PublishedActionFacetAbstract.LegacyAdapter) payloadFactory;
+            final PublishedActionPayloadFactoryDefault legacyAdapter = (PublishedActionPayloadFactoryDefault) payloadFactory;
             assertThat(legacyAdapter.getPayloadFactory(), instanceOf(CustomerSomeActionPublishingPayloadFactory.class));
 
             expectNoMethodsRemoved();
@@ -1301,9 +1341,9 @@ public class ActionAnnotationFacetFactoryTest extends AbstractFacetFactoryJUnit4
 
             final PublishedActionFacetForActionAnnotation facetImpl = (PublishedActionFacetForActionAnnotation) facet;
             final PublishedAction.PayloadFactory payloadFactory = facetImpl.value();
-            assertThat(payloadFactory, instanceOf(PublishedActionFacetAbstract.LegacyAdapter.class));
+            assertThat(payloadFactory, instanceOf(PublishedActionPayloadFactoryDefault.class));
 
-            final PublishedActionFacetAbstract.LegacyAdapter legacyAdapter = (PublishedActionFacetAbstract.LegacyAdapter) payloadFactory;
+            final PublishedActionPayloadFactoryDefault legacyAdapter = (PublishedActionPayloadFactoryDefault) payloadFactory;
             assertThat(legacyAdapter.getPayloadFactory(), instanceOf(CustomerSomeActionPublishingPayloadFactory.class));
 
             expectNoMethodsRemoved();

@@ -26,10 +26,11 @@ import java.util.List;
 import org.apache.isis.core.commons.lang.ObjectExtensions;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.metamodel.facets.CollectionUtils;
 import org.apache.isis.core.metamodel.facets.properties.choices.PropertyChoicesFacetAbstract;
 
@@ -62,17 +63,10 @@ public class PropertyChoicesFacetViaMethod extends PropertyChoicesFacetAbstract 
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
-
-    @Override
-    public boolean impliesObjectChanged() {
-        return false;
-    }
-
-    @Override
-    public Object[] getChoices(final ObjectAdapter owningAdapter, final SpecificationLoader specificationLookup) {
+    public Object[] getChoices(
+            final ObjectAdapter owningAdapter,
+            final SpecificationLoader specificationLookup,
+            final InteractionInitiatedBy interactionInitiatedBy) {
         final Object options = ObjectAdapter.InvokeUtils.invoke(method, owningAdapter);
         if (options == null) {
             return null;

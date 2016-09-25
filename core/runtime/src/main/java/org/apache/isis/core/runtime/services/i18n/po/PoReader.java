@@ -22,11 +22,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.apache.isis.applib.services.i18n.LocaleProvider;
 import org.apache.isis.applib.services.i18n.TranslationService;
 import org.apache.isis.applib.services.i18n.TranslationsResolver;
@@ -128,7 +133,7 @@ class PoReader extends PoAbstract {
                 return msgId;
             }
         } catch(final RuntimeException ex){
-            LOG.warn("Failed to obtain locale, returning the original msgId");
+            logInfoIfNotPreviously("Failed to obtain locale, returning the original msgId");
             return msgId;
         }
 
@@ -156,12 +161,13 @@ class PoReader extends PoAbstract {
         // 3. fallback
         // so this message is only ever displayed if the locale isn't using fallback (ie a translation is genuinely missing)
         final Boolean usesFallback = usesFallbackByLocale.get(targetLocale);
-        if(!usesFallback) {
-            LOG.warn("No translation found for: " + key);
+        if(usesFallback == null || !usesFallback) {
+            logInfoIfNotPreviously("No translation found for: " + key);
         }
 
         return msgId;
     }
+
 
     private String lookupTranslation(final Map<ContextAndMsgId, String> translationsByKey, final ContextAndMsgId key) {
         final String s = translationsByKey.get(key);
@@ -203,12 +209,11 @@ class PoReader extends PoAbstract {
         }
 
         // this is only ever logged the first time that a user using this particular locale is encountered
-        LOG.warn("Could not locate translations for locale: " + locale + ", using fallback");
+        logInfoIfNotPreviously("Could not locate translations for locale: " + locale + ", using fallback");
 
         usesFallbackByLocale.put(locale, true);
         return fallback;
     }
-
 
     private List<String> readPoElseNull(final Locale locale) {
         final String country = locale.getCountry().toUpperCase(Locale.ROOT);
@@ -238,5 +243,17 @@ class PoReader extends PoAbstract {
     private List<String> readUrl(final String candidate) {
         return translationsResolver.readLines(candidate);
     }
+
+
+    // to avoid flooding the logs
+    private void logInfoIfNotPreviously(final String infoMessage) {
+        if(!loggedInfoMessages.contains(infoMessage)) {
+            LOG.info(infoMessage);
+            loggedInfoMessages.add(infoMessage);
+        }
+    }
+
+    private final Set<String> loggedInfoMessages = Sets.newConcurrentHashSet();
+
 
 }

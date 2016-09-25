@@ -21,11 +21,12 @@ package org.apache.isis.core.runtime.services;
 
 import java.lang.reflect.Modifier;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+
 import javax.annotation.PreDestroy;
+
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
@@ -34,23 +35,29 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+
 import org.reflections.Reflections;
 import org.reflections.vfs.Vfs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.apache.isis.applib.AppManifest;
 import org.apache.isis.applib.annotation.DomainService;
 import org.apache.isis.applib.annotation.DomainServiceLayout;
 import org.apache.isis.applib.services.classdiscovery.ClassDiscoveryServiceUsingReflections;
-import org.apache.isis.core.commons.config.InstallerAbstract;
-import org.apache.isis.core.runtime.system.DeploymentType;
+import org.apache.isis.core.commons.config.IsisConfigurationDefault;
+import org.apache.isis.core.metamodel.util.DeweyOrderComparator;
 
 import static com.google.common.base.Predicates.and;
 import static com.google.common.base.Predicates.not;
 
-public class ServicesInstallerFromAnnotation extends InstallerAbstract implements ServicesInstaller {
+public class ServicesInstallerFromAnnotation extends ServicesInstallerAbstract {
+
+    //region > constants
 
     private static final Logger LOG = LoggerFactory.getLogger(ServicesInstallerFromAnnotation.class);
 
+    public static final String NAME = "annotation";
     public final static String PACKAGE_PREFIX_KEY = "isis.services.ServicesInstallerFromAnnotation.packagePrefix";
 
     /**
@@ -65,29 +72,26 @@ public class ServicesInstallerFromAnnotation extends InstallerAbstract implement
      *     with the first service found used.
      * </p>
      */
-    public final static String PACKAGE_PREFIX_STANDARD = Joiner.on(",").join(
-                                        "org.apache.isis.applib",
-                                        "org.apache.isis.core.wrapper" ,
-                                        "org.apache.isis.core.metamodel.services" ,
-                                        "org.apache.isis.core.runtime.services" ,
-                                        "org.apache.isis.objectstore.jdo.applib.service" ,
-                                        "org.apache.isis.viewer.restfulobjects.rendering.service" ,
-                                        "org.apache.isis.objectstore.jdo.datanucleus.service.support" ,
-                                        "org.apache.isis.objectstore.jdo.datanucleus.service.eventbus" ,
-                                        "org.apache.isis.viewer.wicket.viewer.services");
+    public final static String PACKAGE_PREFIX_STANDARD = Joiner.on(",").join(AppManifest.Registry.FRAMEWORK_PROVIDED_SERVICES);
+    //endregion
+
+    //region > constructor, fields
 
     private final ServiceInstantiator serviceInstantiator;
 
-    public ServicesInstallerFromAnnotation() {
-        this(new ServiceInstantiator());
+    public ServicesInstallerFromAnnotation(final IsisConfigurationDefault isisConfiguration) {
+        this(new ServiceInstantiator(), isisConfiguration);
     }
 
-    public ServicesInstallerFromAnnotation(final ServiceInstantiator serviceInstantiator) {
-        super(ServicesInstaller.TYPE, "annotation");
+    public ServicesInstallerFromAnnotation(
+            final ServiceInstantiator serviceInstantiator,
+            final IsisConfigurationDefault isisConfiguration) {
+        super(NAME, isisConfiguration);
         this.serviceInstantiator = serviceInstantiator;
     }
+    //endregion
 
-
+    //region > packagePrefixes
     private String packagePrefixes;
 
     /**
@@ -100,12 +104,9 @@ public class ServicesInstallerFromAnnotation extends InstallerAbstract implement
     public void withPackagePrefixes(final String... packagePrefixes) {
         this.packagePrefixes = Joiner.on(",").join(packagePrefixes);
     }
+    //endregion
 
-    @Override
-    public void setIgnoreFailures(final boolean ignoreFailures) {
-        // no-op
-    }
-
+    //region > init, shutdown
 
     public void init() {
         initIfRequired();
@@ -127,12 +128,12 @@ public class ServicesInstallerFromAnnotation extends InstallerAbstract implement
             serviceInstantiator.setConfiguration(getConfiguration());
 
             if(packagePrefixes == null) {
-                this.packagePrefixes = getConfiguration().getString(PACKAGE_PREFIX_KEY);
-                if(Strings.isNullOrEmpty(packagePrefixes)) {
-                    throw new IllegalStateException("Could not locate '" + PACKAGE_PREFIX_KEY + "' key in property files - aborting");
+                this.packagePrefixes = PACKAGE_PREFIX_STANDARD;
+                String packagePrefixes = getConfiguration().getString(PACKAGE_PREFIX_KEY);
+                if(!Strings.isNullOrEmpty(packagePrefixes)) {
+                    this.packagePrefixes = this.packagePrefixes + "," + packagePrefixes;
                 }
             }
-            this.packagePrefixes = PACKAGE_PREFIX_STANDARD + "," + this.packagePrefixes;
 
         } finally {
             initialized = true;
@@ -143,7 +144,9 @@ public class ServicesInstallerFromAnnotation extends InstallerAbstract implement
     public void shutdown() {
     }
 
-    // //////////////////////////////////////
+    //endregion
+
+    //region > helpers
 
     private Predicate<Class<?>> instantiatable() {
         return and(not(nullClass()), not(abstractClass()));
@@ -178,42 +181,43 @@ public class ServicesInstallerFromAnnotation extends InstallerAbstract implement
         };
     }
 
+    //endregion
 
-    // //////////////////////////////////////
+    //region > getServices (API)
 
-    private Map<DeploymentType, List<Object>> servicesByDeploymentType = Maps.newHashMap();
+    private List<Object> services;
 
     @Override
-    public List<Object> getServices(final DeploymentType deploymentType) {
+    public List<Object> getServices() {
         initIfRequired();
 
-        List<Object> serviceList = servicesByDeploymentType.get(deploymentType);
-        if(serviceList == null) {
+        if(this.services == null) {
 
             final SortedMap<String, SortedSet<String>> positionedServices = Maps.newTreeMap(new DeweyOrderComparator());
-            appendServices(deploymentType, positionedServices);
+            appendServices(positionedServices);
 
-            serviceList = ServicesInstallerUtils.instantiateServicesFrom(positionedServices, serviceInstantiator);
-
-            servicesByDeploymentType.put(deploymentType, serviceList);
+            this.services = ServicesInstallerUtils.instantiateServicesFrom(positionedServices, serviceInstantiator);
         }
-        return serviceList;
+        return services;
     }
+    //endregion
 
-    // //////////////////////////////////////
+    //region > appendServices
 
-    public void appendServices(
-            final DeploymentType deploymentType,
-            final SortedMap<String, SortedSet<String>> positionedServices) {
+    public void appendServices(final SortedMap<String, SortedSet<String>> positionedServices) {
         initIfRequired();
 
         final List<String> packagePrefixList = asList(packagePrefixes);
 
-        Vfs.setDefaultURLTypes(ClassDiscoveryServiceUsingReflections.getUrlTypes());
-        final Reflections reflections = new Reflections(packagePrefixList);
+        Set<Class<?>> domainServiceTypes = AppManifest.Registry.instance().getDomainServiceTypes();
+        if(domainServiceTypes == null) {
+            // if no appManifest
+            Vfs.setDefaultURLTypes(ClassDiscoveryServiceUsingReflections.getUrlTypes());
+            final Reflections reflections = new Reflections(packagePrefixList);
+            domainServiceTypes = reflections.getTypesAnnotatedWith(DomainService.class);
+        }
 
-        final Set<Class<?>> typesAnnotatedWith = reflections.getTypesAnnotatedWith(DomainService.class);
-        final List<Class<?>> domainServiceClasses = Lists.newArrayList(Iterables.filter(typesAnnotatedWith, instantiatable()));
+        final List<Class<?>> domainServiceClasses = Lists.newArrayList(Iterables.filter(domainServiceTypes, instantiatable()));
         for (final Class<?> cls : domainServiceClasses) {
 
             final String order = orderOf(cls);
@@ -225,6 +229,10 @@ public class ServicesInstallerFromAnnotation extends InstallerAbstract implement
             ServicesInstallerUtils.appendInPosition(positionedServices, order, fullyQualifiedClassName);
         }
     }
+
+    //endregion
+
+    //region > helpers: orderOf, nameOf, asList
 
     private static String orderOf(final Class<?> cls) {
         final DomainServiceLayout domainServiceLayout = cls.getAnnotation(DomainServiceLayout.class);
@@ -245,17 +253,32 @@ public class ServicesInstallerFromAnnotation extends InstallerAbstract implement
         return name;
     }
 
-    protected List<String> asList(final String csv) {
+    private static List<String> asList(final String csv) {
         return Lists.newArrayList(Iterables.transform(Splitter.on(",").split(csv), trim()));
     }
+    //endregion
 
+    //region > domain events
+    public static abstract class PropertyDomainEvent<T>
+            extends org.apache.isis.applib.services.eventbus.PropertyDomainEvent<ServicesInstallerFromAnnotation, T> {
+    }
 
-    // //////////////////////////////////////
+    public static abstract class CollectionDomainEvent<T>
+            extends org.apache.isis.applib.services.eventbus.CollectionDomainEvent<ServicesInstallerFromAnnotation, T> {
+    }
+
+    public static abstract class ActionDomainEvent
+            extends org.apache.isis.applib.services.eventbus.ActionDomainEvent<ServicesInstallerFromAnnotation> {
+    }
+    //endregion
+
+    //region > getTypes (API)
 
     @Override
     public List<Class<?>> getTypes() {
         return listOf(List.class); // ie List<Object.class>, of services
     }
 
+    //endregion
 
 }

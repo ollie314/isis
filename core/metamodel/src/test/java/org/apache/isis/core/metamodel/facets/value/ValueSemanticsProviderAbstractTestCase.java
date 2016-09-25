@@ -19,16 +19,10 @@
 
 package org.apache.isis.core.metamodel.facets.value;
 
-import static org.apache.isis.core.unittestsupport.jmocking.JMockActions.returnArgument;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
-
 import java.util.Locale;
 
+import org.apache.isis.core.metamodel.services.configinternal.ConfigurationServiceInternal;
+import org.apache.isis.core.metamodel.services.persistsession.PersistenceSessionServiceInternal;
 import org.jmock.Expectations;
 import org.jmock.auto.Mock;
 import org.junit.After;
@@ -37,23 +31,27 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
-import org.apache.isis.core.commons.config.IsisConfiguration;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.object.encodeable.EncodableFacet;
-import org.apache.isis.core.metamodel.facets.object.parseable.ParseableFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
 import org.apache.isis.core.metamodel.facets.object.encodeable.encoder.EncodableFacetUsingEncoderDecoder;
+import org.apache.isis.core.metamodel.facets.object.parseable.ParseableFacet;
 import org.apache.isis.core.metamodel.facets.object.parseable.parser.ParseableFacetUsingParser;
 import org.apache.isis.core.metamodel.facets.object.value.vsp.ValueSemanticsProviderAndFacetAbstract;
-import org.apache.isis.core.metamodel.facets.object.value.vsp.ValueSemanticsProviderContext;
+
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2;
 import org.apache.isis.core.unittestsupport.jmocking.JUnitRuleMockery2.Mode;
+
+import static org.apache.isis.core.unittestsupport.jmocking.JMockActions.returnArgument;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 public abstract class ValueSemanticsProviderAbstractTestCase {
 
@@ -67,15 +65,13 @@ public abstract class ValueSemanticsProviderAbstractTestCase {
     @Mock
     protected FacetHolder mockFacetHolder;
     @Mock
-    protected IsisConfiguration mockConfiguration;
+    protected ConfigurationServiceInternal mockConfiguration;
     @Mock
-    protected ValueSemanticsProviderContext mockContext;
+    protected ServicesInjector mockServicesInjector;
     @Mock
-    protected ServicesInjector mockDependencyInjector;
+    protected PersistenceSessionServiceInternal mockAdapterManager;
     @Mock
-    protected AdapterManager mockAdapterManager;
-    @Mock
-    protected SpecificationLoaderSpi mockSpecificationLoader;
+    protected SpecificationLoader mockSpecificationLoader;
     @Mock
     protected AuthenticationSessionProvider mockAuthenticationSessionProvider;
     @Mock
@@ -96,10 +92,21 @@ public abstract class ValueSemanticsProviderAbstractTestCase {
                 allowing(mockConfiguration).getString("isis.locale");
                 will(returnValue(null));
 
-                allowing(mockDependencyInjector).injectServicesInto(with(any(Object.class)));
+                allowing(mockServicesInjector).getConfigurationServiceInternal();
+                will(returnValue(mockConfiguration));
+
+                allowing(mockServicesInjector).getAuthenticationSessionProvider();
+                will(returnValue(mockAuthenticationSessionProvider));
+
+                allowing(mockServicesInjector).getPersistenceSessionServiceInternal();
+                will(returnValue(mockAdapterManager));
+
+                allowing(mockServicesInjector).lookupService(AuthenticationSessionProvider.class);
+                will(returnValue(mockAuthenticationSessionProvider));
+
+                allowing(mockServicesInjector).injectServicesInto(with(any(Object.class)));
 
                 never(mockAuthenticationSessionProvider);
-
                 never(mockAdapterManager);
             }
         });
@@ -121,8 +128,9 @@ public abstract class ValueSemanticsProviderAbstractTestCase {
 
     protected void setValue(final ValueSemanticsProviderAndFacetAbstract<?> value) {
         this.valueSemanticsProvider = value;
-        this.encodeableFacet = new EncodableFacetUsingEncoderDecoder(value, mockFacetHolder, mockAdapterManager, mockDependencyInjector);
-        this.parseableFacet = new ParseableFacetUsingParser(value, mockFacetHolder, DeploymentCategory.PRODUCTION, mockAuthenticationSessionProvider, mockDependencyInjector, mockAdapterManager);
+        this.encodeableFacet = new EncodableFacetUsingEncoderDecoder(value, mockFacetHolder, mockAdapterManager,
+                mockServicesInjector);
+        this.parseableFacet = new ParseableFacetUsingParser(value, mockFacetHolder, mockServicesInjector);
     }
 
     protected ValueSemanticsProviderAndFacetAbstract<?> getValue() {
@@ -145,7 +153,7 @@ public abstract class ValueSemanticsProviderAbstractTestCase {
     public void testParseNull() throws Exception {
         Assume.assumeThat(valueSemanticsProvider.getParser(), is(not(nullValue())));
         try {
-            valueSemanticsProvider.parseTextEntry(null, null, null);
+            valueSemanticsProvider.parseTextEntry(null, null);
             fail();
         } catch (final IllegalArgumentException expected) {
         }
@@ -155,7 +163,7 @@ public abstract class ValueSemanticsProviderAbstractTestCase {
     public void testParseEmptyString() throws Exception {
         Assume.assumeThat(valueSemanticsProvider.getParser(), is(not(nullValue())));
 
-        final Object newValue = valueSemanticsProvider.parseTextEntry(null, "", null);
+        final Object newValue = valueSemanticsProvider.parseTextEntry(null, "");
         assertNull(newValue);
     }
 
@@ -176,6 +184,6 @@ public abstract class ValueSemanticsProviderAbstractTestCase {
 
     @Test
     public void testTitleOfForNullObject() {
-        assertEquals("", valueSemanticsProvider.displayTitleOf(null, (Localization) null));
+        assertEquals("", valueSemanticsProvider.displayTitleOf(null));
     }
 }

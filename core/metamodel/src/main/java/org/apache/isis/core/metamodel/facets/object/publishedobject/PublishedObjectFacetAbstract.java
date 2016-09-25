@@ -20,9 +20,7 @@
 package org.apache.isis.core.metamodel.facets.object.publishedobject;
 
 import org.apache.isis.applib.annotation.PublishedObject;
-import org.apache.isis.applib.annotation.PublishingChangeKind;
 import org.apache.isis.applib.annotation.PublishingPayloadFactoryForObject;
-import org.apache.isis.applib.services.publish.EventPayload;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.SingleValueFacetAbstract;
@@ -33,11 +31,19 @@ public abstract class PublishedObjectFacetAbstract extends SingleValueFacetAbstr
         return PublishedObjectFacet.class;
     }
 
-    public PublishedObjectFacetAbstract(final PublishedObject.PayloadFactory payloadFactory, final FacetHolder holder) {
-        super(type(), payloadFactory, holder);
+    public PublishedObjectFacetAbstract(
+            final PublishedObject.PayloadFactory payloadFactory,
+            final FacetHolder holder) {
+        super(  type(),
+                payloadFactory != null
+                        ? payloadFactory
+                        : new PublishedObjectPayloadFactoryDefault(),
+                holder);
     }
 
-    protected PublishedObjectFacetAbstract(final PublishingPayloadFactoryForObject publishingPayloadFactory, final FacetHolder holder) {
+    protected PublishedObjectFacetAbstract(
+            final PublishingPayloadFactoryForObject publishingPayloadFactory,
+            final FacetHolder holder) {
         this(legacyPayloadFactoryFor(publishingPayloadFactory), holder);
     }
 
@@ -49,28 +55,7 @@ public abstract class PublishedObjectFacetAbstract extends SingleValueFacetAbstr
             final PublishingPayloadFactoryForObject.Adapter adapter = (PublishingPayloadFactoryForObject.Adapter) publishingPayloadFactory;
             return adapter.getPayloadFactory();
         }
-        return new LegacyAdapter(publishingPayloadFactory);
-    }
-
-    public static class LegacyAdapter implements PublishedObject.PayloadFactory {
-
-        private final PublishingPayloadFactoryForObject payloadFactory;
-
-        LegacyAdapter(final PublishingPayloadFactoryForObject payloadFactory) {
-            this.payloadFactory = payloadFactory;
-        }
-
-        @Override
-        public EventPayload payloadFor(final Object changedObject, final PublishedObject.ChangeKind changeKind) {
-            return payloadFactory.payloadFor(changedObject, PublishingChangeKind.from(changeKind));
-        }
-
-        /**
-         * For testing only.
-         */
-        public PublishingPayloadFactoryForObject getPayloadFactory() {
-            return payloadFactory;
-        }
+        return new PublishedObjectPayloadFactoryDefault(publishingPayloadFactory);
     }
 
 }

@@ -17,7 +17,9 @@
 package org.apache.isis.applib.services.command;
 
 import java.sql.Timestamp;
+
 import org.apache.isis.applib.Identifier;
+import org.apache.isis.applib.annotation.Action;
 import org.apache.isis.applib.annotation.Command.ExecuteIn;
 import org.apache.isis.applib.annotation.Command.Persistence;
 import org.apache.isis.applib.annotation.Optional;
@@ -28,95 +30,126 @@ import org.apache.isis.applib.services.background.BackgroundCommandService;
 import org.apache.isis.applib.services.background.BackgroundService;
 import org.apache.isis.applib.services.bookmark.Bookmark;
 import org.apache.isis.applib.services.bookmark.BookmarkService;
+import org.apache.isis.applib.services.eventbus.ActionDomainEvent;
+import org.apache.isis.applib.services.iactn.Interaction;
+import org.apache.isis.applib.services.publish.EventMetadata;
+import org.apache.isis.applib.services.publish.EventPayload;
+import org.apache.isis.applib.services.wrapper.WrapperFactory;
+import org.apache.isis.schema.cmd.v1.CommandDto;
 
+/**
+ * Represents the <i>intention to</i> invoke either an action or modify a property.  This intention is reified as a
+ * {@link Command#getMemento() memento} by way of the (internal) <tt>CommandDtoServiceInternal</tt> domain service;
+ * typically corresponding to the XML equivalent of a {@link CommandDto}.
+ *
+ * <p>
+ *     The {@link Command} interface also captures details of the corresponding action invocation (or property edit),
+ *     specifically when that action/edit {@link Command#getStartedAt() started} or
+ *     {@link Command#getCompletedAt() completed}, and its result, either a {@link Command#getResult() return value}
+ *     or an {@link Command#getException() exception}.  The {@link Command3} sub-interface also captures the stack
+ *     of {@link ActionDomainEvent}s.
+ * </p>
+ *
+ * <p>
+ *     Note that when invoking an action, other actions may be invoked courtesy of the {@link WrapperFactory}.  These
+ *     "sub-actions" do <i>not</i> modify the contents of the command object; in other words think of the command
+ *     object as representing the outer-most originating action.
+ * </p>
+ *
+ * <p>
+ *     One of the responsibilities of the command is to generate unique sequence numbers for a given transactionId.
+ *     This is done by {@link #next(String)}.  There are three possible sequences that might be generated:
+ *     the sequence of changed domain objects being published by the {@link org.apache.isis.applib.services.publish.PublishingService#publish(EventMetadata, EventPayload)}; the
+ *     sequence of wrapped action invocations (each being published), and finally one or more background commands
+ *     that might be scheduled via the {@link BackgroundService}.
+ * </p>
+ *
+ */
 public interface Command extends HasTransactionId {
 
-    // //////////////////////////////////////
-    // user (property)
-    // //////////////////////////////////////
-
     /**
-     * The user that initiated the action.
+     * @deprecated - in previous versions this was the value for {@link #getTargetAction()} if this command represents an edit of an object's property (rather than an action); now though the property's name is used (ie same as actions).
+     */
+    @Deprecated
+    String ACTION_IDENTIFIER_FOR_EDIT = "(edit)";
+
+
+
+    //region > user (property)
+    /**
+     * The user that created the command.
      */
 
-    public abstract String getUser();
+    String getUser();
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      * 
      * <p>
      * Implementation notes: set when the Isis PersistenceSession is opened.
      */
-    public abstract void setUser(String user);
+    void setUser(String user);
+    //endregion
 
-    // //////////////////////////////////////
-    // timestamp (property)
-    // //////////////////////////////////////
+    //region > timestamp (property)
 
     /**
-     * The date/time at which this action was created.
+     * The date/time at which this command was created.
      */
-    public abstract Timestamp getTimestamp();
+    Timestamp getTimestamp();
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      * 
      * <p>
      * Implementation notes: set when the Isis PersistenceSession is opened.  Uses the applib {@link Clock}.
      */
-    public abstract void setTimestamp(Timestamp startedAt);
-    
-    
-    // //////////////////////////////////////
-    // target (property)
-    // //////////////////////////////////////
+    void setTimestamp(Timestamp timestamp);
 
-    
+    //endregion
+
+    //region > target (property)
+
     /**
      * {@link Bookmark} of the target object (entity or service) on which this action was performed.
      * 
      * <p>
      * Will only be populated if a {@link BookmarkService} has been configured.
      */
-    public abstract Bookmark getTarget();
+    Bookmark getTarget();
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      * 
      * <p>
      * Implementation notes: set when the action is invoked (in the ActionInvocationFacet).
      */
-    public abstract void setTarget(Bookmark target);
-    
-    
-    // //////////////////////////////////////
-    // memberIdentifier (property)
-    // //////////////////////////////////////
+    void setTarget(Bookmark target);
+
+    //endregion
+
+    //region > memberIdentifier (property)
 
     /**
-     * Holds a string representation of the invoked action, equivalent to
+     * Holds a string representation of the invoked action, or the edited property, equivalent to
      * {@link Identifier#toClassAndNameIdentityString()}.
-     * 
-     * <p>
-     * This property is called 'memberIdentifier' rather than 'actionIdentifier' for
-     * consistency with other services (such as auditing and publishing) that may act on
-     * properties rather than simply just actions.
      */
-    public abstract String getMemberIdentifier();
+    String getMemberIdentifier();
 
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      * 
      * <p>
-     * Implementation notes: set when the action is invoked (in the <tt>ActionInvocationFacet</tt>).
+     * Implementation notes: set when the action is invoked (in <tt>ActionInvocationFacet</tt>) or in
+     * property edited (in <tt>PropertySetterFacet</tt>).
      */
-    public abstract void setMemberIdentifier(String actionIdentifier);
-    
-    // //////////////////////////////////////
-    // targetClass (property)
-    // //////////////////////////////////////
+    void setMemberIdentifier(String actionIdentifier);
+
+    //endregion
+
+    //region > targetClass (property)
 
     /**
      * A human-friendly description of the class of the target object.
      */
-    public abstract String getTargetClass();
+    String getTargetClass();
 
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
@@ -124,33 +157,38 @@ public interface Command extends HasTransactionId {
      * <p>
      * Implementation notes: set when the action is invoked (in the <tt>ActionInvocationFacet</t>).
      */
-    public abstract void setTargetClass(String targetClass);
+    void setTargetClass(String targetClass);
 
-    // //////////////////////////////////////
-    // targetAction (property)
-    // //////////////////////////////////////
-    
+    //endregion
+
+    //region > targetAction (property)
+
     /**
-     * The human-friendly name of the action invoked on the target object.
+     * The human-friendly name of the action invoked/property edited on the target object.
+     *
+     * <p>
+     *     NB: in earlier versions, if the command represented an edit of a property, then it held the special value &quot;{@value ACTION_IDENTIFIER_FOR_EDIT}&quot;.  This is NO LONGER the case; it simply holds the member.
+     * </p>
      */
-    public abstract String getTargetAction();
+    String getTargetAction();
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      * 
      * <p>
-     * Implementation notes: set when the action is invoked (in the <tt>ActionInvocationFacet</tt>).
+     * Implementation notes: set when the action is invoked (in the <tt>ActionInvocationFacet</tt>) or property edited
+     * (in the <tt>PropertySetterOrClearFacet</tt>).
      */
-    public abstract void setTargetAction(String targetAction);
-    
-    // //////////////////////////////////////
-    // arguments (property)
-    // //////////////////////////////////////
-    
+    void setTargetAction(String targetAction);
+
+    //endregion
+
+    //region > arguments (property)
+
     /**
      * A human-friendly description of the arguments with which the action was invoked.
      */
-    public String getArguments();
+    String getArguments();
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
@@ -158,17 +196,16 @@ public interface Command extends HasTransactionId {
      * <p>
      * Implementation notes: set when the action is invoked (in the <tt>ActionInvocationFacet</tt>).
      */
-    public void setArguments(final String arguments);
+    void setArguments(final String arguments);
 
-    
-    // //////////////////////////////////////
-    // memento (property)
-    // //////////////////////////////////////
+    //endregion
+
+    //region > memento (property)
 
     /**
      * A formal (XML or similar) specification of the action to invoke/being invoked.
      */
-    public String getMemento();
+    String getMemento();
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
@@ -176,32 +213,29 @@ public interface Command extends HasTransactionId {
      * <p>
      * Implementation notes: set when the action is invoked (in the <tt>ActionInvocationFacet</tt>).
      */
-    public void setMemento(final String memento);
+    void setMemento(final String memento);
 
+    //endregion
 
-    // //////////////////////////////////////
-    // executeIn (property)
-    // //////////////////////////////////////
-    
+    //region > executeIn (property)
+
     /**
      * The mechanism by which this command is to be executed, either synchronously &quot;in the 
      * {@link ExecuteIn#FOREGROUND foreground}&quot; or is to be executed asynchronously &quot;in the 
      * {@link ExecuteIn#BACKGROUND background}&quot; through the {@link BackgroundCommandService}.
      */
-    public ExecuteIn getExecuteIn();
+    ExecuteIn getExecuteIn();
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      */
-    public void setExecuteIn(final ExecuteIn executeIn);
+    void setExecuteIn(final ExecuteIn executeIn);
 
+    //endregion
 
-    // //////////////////////////////////////
-    // executor (property)
-    // //////////////////////////////////////
-    
-    
-    public static enum Executor {
+    //region > executor (property)
+
+    enum Executor {
         /**
          * Command being executed by the end-user.
          */
@@ -235,131 +269,127 @@ public interface Command extends HasTransactionId {
      * </ul>
      * 
      */
-    public Executor getExecutor();
+    Executor getExecutor();
 
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      */
-    public void setExecutor(final Executor executor);
-    
-    
+    void setExecutor(final Executor executor);
 
+    //endregion
 
-    // //////////////////////////////////////
-    // startedAt (property)
-    // //////////////////////////////////////
+    //region > startedAt (property, deprecated)
 
     /**
-     * The date/time at  which this action started.
-     * 
-     * <p>
-     * For {@link ExecuteIn#FOREGROUND user-initiated} actions, this will always be
-     * populated and have the same value as the {@link #getTimestamp() timestamp}; for
-     * {@link ExecuteIn#BACKGROUND background} actions, this will be populated only when the
-     * action is executed by a background execution process.
+     * For an command that has actually been executed, holds the date/time at which the {@link Interaction} that
+     * executed the command started.
+     *
+     * @deprecated - see {@link Interaction#getStartedAt()}.
      */
-    public abstract Timestamp getStartedAt();
+    @Deprecated
+    Timestamp getStartedAt();
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
-     * 
-     * <p>
-     * Implementation notes: set when the Isis PersistenceSession is opened.  Uses the applib {@link Clock}.
+     *
+     * @deprecated - see {@link Interaction#getCurrentExecution()} and {@link org.apache.isis.applib.services.iactn.Interaction.Execution#setStartedAt(Timestamp)}.
      */
-    public abstract void setStartedAt(Timestamp startedAt);
-    
-    
-    // //////////////////////////////////////
-    // completedAt (property)
-    // //////////////////////////////////////
+    @Deprecated
+    void setStartedAt(Timestamp startedAt);
 
-    
+    //endregion
+
+    //region > completedAt (property, deprecated)
+
     /**
-     * The date/time at which this action completed.
+     * For an command that has actually been executed, holds the date/time at which the {@link Interaction} that
+     * executed the command completed.
+     *
+     * @deprecated - see {@link Interaction#getCurrentExecution()} and  {@link org.apache.isis.applib.services.iactn.Interaction.Execution#getCompletedAt()}.
      */
-    public abstract Timestamp getCompletedAt();
+    @Deprecated
+    Timestamp getCompletedAt();
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
-     * 
-     * <p>
-     * Implementation notes: set when the Isis PersistenceSession is opened.  Uses the applib {@link Clock}.
+     *
+     * @deprecated - see {@link org.apache.isis.applib.services.iactn.Interaction.Execution#setCompletedAt(Timestamp)}.
      */
-    public abstract void setCompletedAt(Timestamp completedAt);
+    @Deprecated
+    void setCompletedAt(Timestamp completedAt);
 
+    //endregion
 
-    // //////////////////////////////////////
-    // parent (property)
-    // //////////////////////////////////////
-
+    //region > parent (property)
 
     /**
      * For actions created through the {@link BackgroundService} and {@link BackgroundCommandService},
      * captures the parent action.
      */
-    public Command getParent();
+    Command getParent();
 
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      */
-    public void setParent(final Command parent);
+    void setParent(final Command parent);
 
-    
-    // //////////////////////////////////////
-    // exception (property)
-    // //////////////////////////////////////
+    //endregion
 
+    //region > exception (property, deprecated)
+
+    /**
+     * For an command that has actually been executed, holds the exception stack
+     * trace if the action invocation/property modification threw an exception.
+     *
+     * @deprecated - see {@link Interaction#getCurrentExecution()} and  {@link org.apache.isis.applib.services.iactn.Interaction.Execution#getThrew()} instead.
+     */
+    @Deprecated
     @Optional
-    public String getException();
+    String getException();
 
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      */
-    public void setException(String stackTrace);
-    
-    // //////////////////////////////////////
-    // result (property)
-    // //////////////////////////////////////
+    void setException(String stackTrace);
 
-    
+    //endregion
+
+    //region > result (property, deprecated)
+
+
     /**
-     * A {@link Bookmark} to the object returned by the action.
+     * For an command that has actually been executed, holds a {@link Bookmark} to the object returned by the corresponding action/property modification.
      * 
-     * <p>
-     * If the action returned either a domain entity or a simple value (and did not throw an
-     * exception) then this object is provided here.  
-     * 
-     * <p>
-     * For <tt>void</tt> methods and for actions returning collections, the value
-     * will be <tt>null</tt>.
+     * @deprecated - see {@link Interaction#getCurrentExecution()} and  {@link org.apache.isis.applib.services.iactn.Interaction.Execution#getReturned()} instead.
      */
-    public Bookmark getResult();
+    @Deprecated
+    Bookmark getResult();
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      */
-    public void setResult(Bookmark resultBookmark);
+    void setResult(Bookmark resultBookmark);
 
-    
-    // //////////////////////////////////////
-    // persistence (programmatic)
-    // //////////////////////////////////////
-    
+    //endregion
+
+    //region > persistence (property)
+
     /**
      * Whether this command should ultimately be persisted (if the configured {@link BackgroundCommandService} supports
      * it) or not.
      * 
      * <p>
-     * If the action being executed has been annotated with the {@link org.apache.isis.applib.annotation.Command} 
-     * annotation, then (unless its {@link org.apache.isis.applib.annotation.Command#persistence() persistence} 
-     * attribute has been set to a different value than its default of {@link Persistence#PERSISTED}), the 
+     * If the action to be executed has been annotated with the {@link Action#command()} attribute
+     * then (unless its {@link Action#commandPersistence()} persistence} attribute has been set to a different value
+     * than its default of {@link org.apache.isis.applib.annotation.CommandPersistence#PERSISTED persisted}), the
      * {@link Command} object will be persisted.
      * 
      * <p>
      * However, it is possible to prevent the {@link Command} object from ever being persisted by setting the
-     * {@link org.apache.isis.applib.annotation.Command#persistence() persistence} attribute to 
-     * {@link Persistence#NOT_PERSISTED}, or it can be set to {@link Persistence#IF_HINTED}, meaning it is dependent
+     * {@link org.apache.isis.applib.annotation.Action#commandPersistence() persistence} attribute to
+     * {@link org.apache.isis.applib.annotation.CommandPersistence#NOT_PERSISTED}, or it can be set to
+     * {@link org.apache.isis.applib.annotation.CommandPersistence#IF_HINTED}, meaning it is dependent
      * on whether {@link #setPersistHint(boolean) a hint has been set} by some other means.  
      *
      * <p>
@@ -368,24 +398,22 @@ public interface Command extends HasTransactionId {
      * {@link Command}.  The hinting mechanism allows the service to suggest that the parent command be persisted so
      * that the app can then provide a mechanism to find all child background commands for that original parent command.
      */
-    public Persistence getPersistence();
+    Persistence getPersistence();
     
     /**
      * <b>NOT API</b>: intended to be called only by the framework.
      */
-    public void setPersistence(final Persistence persistence);
-    
+    void setPersistence(final Persistence persistence);
+    //endregion
 
-    // //////////////////////////////////////
-    // persistHint (programmatic)
-    // //////////////////////////////////////
+    //region > persistHint (programmatic)
 
-    
+
     /**
      * Whether that this {@link Command} should be persisted, if possible.
      */
     @Programmatic
-    public boolean isPersistHint();
+    boolean isPersistHint();
     
     /**
      * Hint that this {@link Command} should be persisted, if possible.
@@ -396,20 +424,20 @@ public interface Command extends HasTransactionId {
      * @see #getPersistence()
      */
     @Programmatic
-    public void setPersistHint(boolean persistHint);
-    
-    // //////////////////////////////////////
-    // next (programmatic)
-    // //////////////////////////////////////
+    void setPersistHint(boolean persistHint);
+    //endregion
+
+    //region > next (programmatic, deprecated)
 
     /**
-     * Generates numbers in a named sequence
-     * 
-     * <p>
-     * Used to support the <tt>PublishingServiceJdo</tt> implementation whose
-     * persisted entities are uniquely identified by a ({@link #getTransactionId() transactionId}, <tt>sequence</tt>)
-     * tuple.
+     * <b>NOT API</b>: intended to be called only by the framework.
+     *
+     * @deprecated - no longer used (the framework uses {@link Interaction#next(String)} instead).
      */
+    @Deprecated
     @Programmatic
-    public int next(final String sequenceName);
-}    
+    int next(final String sequenceAbbr);
+
+    //endregion
+
+}

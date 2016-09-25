@@ -26,11 +26,12 @@ import java.util.StringTokenizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.common.base.Strings;
+import com.google.common.collect.Maps;
+
 import org.apache.isis.applib.annotation.CssClassFa;
-import org.apache.isis.core.metamodel.facets.members.cssclassfa.CssClassFaPosition;
 import org.apache.isis.core.commons.config.ConfigurationConstants;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
@@ -38,13 +39,12 @@ import org.apache.isis.core.metamodel.facetapi.MetaModelValidatorRefiner;
 import org.apache.isis.core.metamodel.facets.ContributeeMemberFacetFactory;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
 import org.apache.isis.core.metamodel.facets.members.cssclassfa.CssClassFaFacet;
+import org.apache.isis.core.metamodel.facets.members.cssclassfa.CssClassFaPosition;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorForDeprecatedAnnotation;
 
-import com.google.common.base.Strings;
-import com.google.common.collect.Maps;
-
-public class CssClassFaFacetOnMemberFactory extends FacetFactoryAbstract implements ContributeeMemberFacetFactory, MetaModelValidatorRefiner, IsisConfigurationAware {
+public class CssClassFaFacetOnMemberFactory extends FacetFactoryAbstract implements ContributeeMemberFacetFactory, MetaModelValidatorRefiner {
     
     private final MetaModelValidatorForDeprecatedAnnotation validator = new MetaModelValidatorForDeprecatedAnnotation(CssClassFa.class);
 
@@ -132,7 +132,7 @@ public class CssClassFaFacetOnMemberFactory extends FacetFactoryAbstract impleme
     private Map<Pattern, String> getFaIconByPattern() {
         if (faIconByPattern == null) {
             // build lazily
-            final String cssClassFaPatterns = configuration.getString("isis.reflector.facet.cssClassFa.patterns");
+            final String cssClassFaPatterns = getConfiguration().getString("isis.reflector.facet.cssClassFa.patterns");
             this.faIconByPattern = buildFaIconByPattern(cssClassFaPatterns);
         }
         return faIconByPattern;
@@ -171,13 +171,13 @@ public class CssClassFaFacetOnMemberFactory extends FacetFactoryAbstract impleme
         metaModelValidator.add(validator);
     }
 
-    // region > injected
-    private IsisConfiguration configuration;
 
     @Override
-    public void setConfiguration(final IsisConfiguration configuration) {
-        this.configuration = configuration;
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        final IsisConfiguration configuration = getConfiguration();
         validator.setConfiguration(configuration);
     }
-    // endregion
+
+
 }

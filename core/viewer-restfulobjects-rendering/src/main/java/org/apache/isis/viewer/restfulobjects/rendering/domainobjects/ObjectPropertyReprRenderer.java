@@ -18,8 +18,10 @@ package org.apache.isis.viewer.restfulobjects.rendering.domainobjects;
 
 import java.util.List;
 import java.util.Map;
+
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.google.common.collect.Lists;
+
 import org.apache.isis.applib.annotation.Render.Type;
 import org.apache.isis.applib.annotation.Where;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
@@ -52,14 +54,18 @@ public class ObjectPropertyReprRenderer extends AbstractObjectMemberReprRenderer
             final LinkFollowSpecs linkFollower,
             final String propertyId,
             final JsonRepresentation representation) {
-        super(resourceContext, linkFollower, propertyId, RepresentationType.OBJECT_PROPERTY, representation, Where.OBJECT_FORMS);
+        super(resourceContext, linkFollower, propertyId, RepresentationType.OBJECT_PROPERTY, representation,
+                Where.OBJECT_FORMS);
     }
 
     @Override
     public JsonRepresentation render() {
 
         renderMemberContent();
-        addValue();
+
+        final LinkFollowSpecs followValue = getLinkFollowSpecs().follow("value");
+
+        addValue(followValue);
 
         putDisabledReasonIfDisabled();
 
@@ -75,8 +81,8 @@ public class ObjectPropertyReprRenderer extends AbstractObjectMemberReprRenderer
     // value
     // ///////////////////////////////////////////////////
 
-    private Object addValue() {
-        final ObjectAdapter valueAdapter = objectMember.get(objectAdapter);
+    private Object addValue(final LinkFollowSpecs linkFollower) {
+        final ObjectAdapter valueAdapter = objectMember.get(objectAdapter, getInteractionInitiatedBy());
         
         // use the runtime type if we have a value, else the compile time type of the member otherwise
         final ObjectSpecification spec = valueAdapter != null? valueAdapter.getSpecification(): objectMember.getSpecification();
@@ -110,7 +116,9 @@ public class ObjectPropertyReprRenderer extends AbstractObjectMemberReprRenderer
         }
 
         final RenderFacet renderFacet = objectMember.getFacet(RenderFacet.class);
-        boolean eagerlyRender = renderFacet != null && renderFacet.value() == Type.EAGERLY && rendererContext.canEagerlyRender(valueAdapter);
+        boolean eagerlyRender =
+                (renderFacet != null && renderFacet.value() == Type.EAGERLY && rendererContext.canEagerlyRender(valueAdapter))
+                        || (linkFollower != null && !linkFollower.isTerminated());
 
         if(valueAdapter == null) {
             final NullNode value = NullNode.getInstance();
@@ -118,11 +126,12 @@ public class ObjectPropertyReprRenderer extends AbstractObjectMemberReprRenderer
             return value;
         } else {
             final TitleFacet titleFacet = spec.getFacet(TitleFacet.class);
-            final String title = titleFacet.title(valueAdapter, rendererContext.getLocalization());
+            final String title = titleFacet.title(valueAdapter);
             
             final LinkBuilder valueLinkBuilder = DomainObjectReprRenderer.newLinkToBuilder(rendererContext, Rel.VALUE, valueAdapter).withTitle(title);
             if(eagerlyRender) {
-                final DomainObjectReprRenderer renderer = new DomainObjectReprRenderer(rendererContext, getLinkFollowSpecs(), JsonRepresentation.newMap());
+                final DomainObjectReprRenderer renderer = new DomainObjectReprRenderer(rendererContext, linkFollower, JsonRepresentation.newMap()
+                );
                 renderer.with(valueAdapter);
                 if(mode.isEventSerialization()) {
                     renderer.asEventSerialization();
@@ -161,7 +170,8 @@ public class ObjectPropertyReprRenderer extends AbstractObjectMemberReprRenderer
      */
     @Override
     protected void followDetailsLink(final JsonRepresentation detailsLink) {
-        final ObjectPropertyReprRenderer renderer = new ObjectPropertyReprRenderer(getRendererContext(), getLinkFollowSpecs(), null, JsonRepresentation.newMap());
+        final JsonRepresentation representation = JsonRepresentation.newMap();
+        final ObjectPropertyReprRenderer renderer = new ObjectPropertyReprRenderer(getRendererContext(), getLinkFollowSpecs(), null, representation);
         renderer.with(new ObjectAndProperty(objectAdapter, objectMember)).asFollowed();
         detailsLink.mapPut("value", renderer.render());
     }
@@ -196,7 +206,10 @@ public class ObjectPropertyReprRenderer extends AbstractObjectMemberReprRenderer
     }
 
     private Object propertyChoices() {
-        final ObjectAdapter[] choiceAdapters = objectMember.getChoices(objectAdapter);
+        final ObjectAdapter[] choiceAdapters =
+                objectMember.getChoices(
+                        objectAdapter,
+                        getInteractionInitiatedBy());
         if (choiceAdapters == null || choiceAdapters.length == 0) {
             return null;
         }
@@ -204,9 +217,9 @@ public class ObjectPropertyReprRenderer extends AbstractObjectMemberReprRenderer
         for (final ObjectAdapter choiceAdapter : choiceAdapters) {
             // REVIEW: previously was using the spec of the member, but think instead it should be the spec of the adapter itself
             // final ObjectSpecification choiceSpec = objectMember.getSpecification();
-            
+
             // REVIEW: check that it works for ToDoItem$Category, though...
-            final ObjectSpecification choiceSpec = objectAdapter.getSpecification();
+            final ObjectSpecification choiceSpec = choiceAdapter.getSpecification();
             list.add(DomainObjectReprRenderer.valueOrRef(rendererContext, choiceAdapter, choiceSpec));
         }
         return list;

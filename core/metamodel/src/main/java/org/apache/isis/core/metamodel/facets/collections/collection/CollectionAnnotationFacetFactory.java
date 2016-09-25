@@ -23,6 +23,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+
 import org.apache.isis.applib.annotation.Collection;
 import org.apache.isis.applib.annotation.CollectionInteraction;
 import org.apache.isis.applib.annotation.Disabled;
@@ -33,7 +34,6 @@ import org.apache.isis.applib.annotation.PostsCollectionRemovedFromEvent;
 import org.apache.isis.applib.annotation.TypeOf;
 import org.apache.isis.applib.services.eventbus.CollectionDomainEvent;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
@@ -72,13 +72,13 @@ import org.apache.isis.core.metamodel.facets.collections.modify.CollectionRemove
 import org.apache.isis.core.metamodel.facets.members.disabled.DisabledFacet;
 import org.apache.isis.core.metamodel.facets.propcoll.accessor.PropertyOrCollectionAccessorFacet;
 import org.apache.isis.core.metamodel.facets.propcoll.notpersisted.NotPersistedFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjectorAware;
-import org.apache.isis.core.metamodel.specloader.collectiontyperegistry.CollectionTypeRegistry;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.specloader.CollectionUtils;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorForDeprecatedAnnotation;
+import org.apache.isis.core.metamodel.util.EventUtil;
 
-public class CollectionAnnotationFacetFactory extends FacetFactoryAbstract implements ServicesInjectorAware, MetaModelValidatorRefiner, IsisConfigurationAware {
+public class CollectionAnnotationFacetFactory extends FacetFactoryAbstract implements MetaModelValidatorRefiner {
 
     private final MetaModelValidatorForDeprecatedAnnotation postsCollectionAddedToEventValidator = new MetaModelValidatorForDeprecatedAnnotation(PostsCollectionAddedToEvent.class);
     private final MetaModelValidatorForDeprecatedAnnotation postsCollectionRemovedFromEventValidator = new MetaModelValidatorForDeprecatedAnnotation(PostsCollectionRemovedFromEvent.class);
@@ -88,9 +88,6 @@ public class CollectionAnnotationFacetFactory extends FacetFactoryAbstract imple
     private final MetaModelValidatorForDeprecatedAnnotation notPersistedValidator = new MetaModelValidatorForDeprecatedAnnotation(NotPersisted.class);
     private final MetaModelValidatorForDeprecatedAnnotation typeOfValidator = new MetaModelValidatorForDeprecatedAnnotation(TypeOf.class);
 
-    private final CollectionTypeRegistry collectionTypeRegistry = new CollectionTypeRegistry();
-
-    private ServicesInjector servicesInjector;
 
     public CollectionAnnotationFacetFactory() {
         super(FeatureType.COLLECTIONS_AND_ACTIONS);
@@ -166,7 +163,16 @@ public class CollectionAnnotationFacetFactory extends FacetFactoryAbstract imple
             collectionDomainEventFacet = new CollectionDomainEventFacetDefault(
                     collectionDomainEventType, servicesInjector, getSpecificationLoader(), holder);
         }
-        FacetUtil.addFacet(collectionDomainEventFacet);
+        if(!CollectionDomainEvent.Noop.class.isAssignableFrom(collectionDomainEventFacet.getEventType())) {
+            FacetUtil.addFacet(collectionDomainEventFacet);
+        }
+        if(EventUtil.eventTypeIsPostable(
+                collectionDomainEventFacet.getEventType(),
+                CollectionDomainEvent.Noop.class,
+                CollectionDomainEvent.Default.class,
+                "isis.reflector.facet.collectionAnnotation.domainEvent.postForDefault", getConfiguration())) {
+            FacetUtil.addFacet(collectionDomainEventFacet);
+        }
 
 
         //
@@ -291,7 +297,7 @@ public class CollectionAnnotationFacetFactory extends FacetFactoryAbstract imple
         final Method method = processMethodContext.getMethod();
 
         final Class<?> methodReturnType = method.getReturnType();
-        if (!collectionTypeRegistry.isCollectionType(methodReturnType) && !collectionTypeRegistry.isArrayType(methodReturnType)) {
+        if (!CollectionUtils.isCollectionType(methodReturnType) && !CollectionUtils.isArrayType(methodReturnType)) {
             return;
         }
 
@@ -374,7 +380,10 @@ public class CollectionAnnotationFacetFactory extends FacetFactoryAbstract imple
 
 
     @Override
-    public void setConfiguration(final IsisConfiguration configuration) {
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        final IsisConfiguration configuration = getConfiguration();
+
         postsCollectionAddedToEventValidator.setConfiguration(configuration);
         postsCollectionRemovedFromEventValidator.setConfiguration(configuration);
         collectionInteractionValidator.setConfiguration(configuration);
@@ -384,8 +393,5 @@ public class CollectionAnnotationFacetFactory extends FacetFactoryAbstract imple
         disabledValidator.setConfiguration(configuration);
     }
 
-    @Override
-    public void setServicesInjector(final ServicesInjector servicesInjector) {
-        this.servicesInjector = servicesInjector;
-    }
+
 }

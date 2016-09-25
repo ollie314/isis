@@ -20,17 +20,22 @@ package org.apache.isis.viewer.restfulobjects.rendering;
 
 import java.util.List;
 import java.util.Map;
+
 import javax.ws.rs.core.MediaType;
+
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.runtime.system.context.IsisContext;
 import org.apache.isis.viewer.restfulobjects.applib.JsonRepresentation;
 import org.apache.isis.viewer.restfulobjects.applib.Rel;
 import org.apache.isis.viewer.restfulobjects.applib.RepresentationType;
 import org.apache.isis.viewer.restfulobjects.rendering.domainobjects.DomainObjectReprRenderer;
 import org.apache.isis.viewer.restfulobjects.rendering.domaintypes.DomainTypeReprRenderer;
+import org.apache.isis.viewer.restfulobjects.rendering.service.RepresentationService;
 
 public abstract class ReprRendererAbstract<R extends ReprRendererAbstract<R, T>, T> implements ReprRenderer<R, T> {
 
@@ -40,14 +45,51 @@ public abstract class ReprRendererAbstract<R extends ReprRendererAbstract<R, T>,
     protected final JsonRepresentation representation;
     private final Map<String,String> mediaTypeParams = Maps.newLinkedHashMap();
 
+    private final DeploymentCategory deploymentCategory;
+    private final InteractionInitiatedBy interactionInitiatedBy;
+
     protected boolean includesSelf;
 
-    public ReprRendererAbstract(final RendererContext rendererContext, final LinkFollowSpecs linkFollower, final RepresentationType representationType, final JsonRepresentation representation) {
+    public ReprRendererAbstract(
+            final RendererContext rendererContext,
+            final LinkFollowSpecs linkFollower,
+            final RepresentationType representationType,
+            final JsonRepresentation representation) {
         this.rendererContext = rendererContext;
         this.linkFollower = asProvidedElseCreate(linkFollower);
         this.representationType = representationType;
         this.representation = representation;
+
+        this.deploymentCategory = determineDeploymentCategoryFrom(this.rendererContext);
+        this.interactionInitiatedBy = determineInteractionInitiatedByFrom(this.rendererContext);
     }
+
+    private static DeploymentCategory determineDeploymentCategoryFrom(final RendererContext rendererContext) {
+        if(rendererContext instanceof RendererContext3) {
+            return ((RendererContext3) rendererContext).getDeploymentCategory();
+        } else {
+            return DeploymentCategory.PRODUCTION; // fallback
+        }
+    }
+
+    private static InteractionInitiatedBy determineInteractionInitiatedByFrom(
+            final RendererContext rendererContext) {
+        if (rendererContext instanceof RepresentationService.Context4) {
+            return ((RepresentationService.Context4) rendererContext).getInteractionInitiatedBy();
+        } else {
+            // fallback
+            return InteractionInitiatedBy.USER;
+        }
+    }
+
+    protected DeploymentCategory getDeploymentCategory() {
+        return deploymentCategory;
+    }
+
+    protected InteractionInitiatedBy getInteractionInitiatedBy() {
+        return interactionInitiatedBy;
+    }
+
 
     public RendererContext getRendererContext() {
         return rendererContext;
@@ -182,7 +224,7 @@ public abstract class ReprRendererAbstract<R extends ReprRendererAbstract<R, T>,
     }
 
     protected List<ObjectAdapter> getServiceAdapters() {
-        return IsisContext.getPersistenceSession().getServices();
+        return rendererContext.getPersistenceSession().getServices();
     }
 
 }

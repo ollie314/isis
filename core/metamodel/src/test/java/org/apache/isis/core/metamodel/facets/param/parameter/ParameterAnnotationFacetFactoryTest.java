@@ -21,25 +21,27 @@ package org.apache.isis.core.metamodel.facets.param.parameter;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.regex.Pattern;
+
 import org.jmock.Expectations;
 import org.jmock.auto.Mock;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
 import org.apache.isis.applib.annotation.Optionality;
 import org.apache.isis.applib.annotation.Parameter;
 import org.apache.isis.applib.spec.Specification;
 import org.apache.isis.core.metamodel.facets.AbstractFacetFactoryJUnit4TestCase;
 import org.apache.isis.core.metamodel.facets.FacetFactory;
+import org.apache.isis.core.metamodel.facets.objectvalue.mandatory.MandatoryFacet;
+import org.apache.isis.core.metamodel.facets.objectvalue.maxlen.MaxLengthFacet;
+import org.apache.isis.core.metamodel.facets.objectvalue.mustsatisfyspec.MustSatisfySpecificationFacet;
 import org.apache.isis.core.metamodel.facets.objectvalue.regex.RegExFacet;
 import org.apache.isis.core.metamodel.facets.param.parameter.mandatory.MandatoryFacetForParameterAnnotation;
 import org.apache.isis.core.metamodel.facets.param.parameter.maxlen.MaxLengthFacetForParameterAnnotation;
 import org.apache.isis.core.metamodel.facets.param.parameter.mustsatisfy.MustSatisfySpecificationFacetForParameterAnnotation;
 import org.apache.isis.core.metamodel.facets.param.parameter.regex.RegExFacetForParameterAnnotation;
-import org.apache.isis.core.metamodel.facets.objectvalue.mandatory.MandatoryFacet;
-import org.apache.isis.core.metamodel.facets.objectvalue.maxlen.MaxLengthFacet;
-import org.apache.isis.core.metamodel.facets.objectvalue.mustsatisfyspec.MustSatisfySpecificationFacet;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -64,10 +66,10 @@ public class ParameterAnnotationFacetFactoryTest extends AbstractFacetFactoryJUn
 
     void allowingLoadSpecificationRequestsFor(final Class<?> cls, final Class<?> returnType) {
         context.checking(new Expectations() {{
-            allowing(mockSpecificationLoaderSpi).loadSpecification(cls);
+            allowing(mockSpecificationLoader).loadSpecification(cls);
             will(returnValue(mockTypeSpec));
 
-            allowing(mockSpecificationLoaderSpi).loadSpecification(returnType);
+            allowing(mockSpecificationLoader).loadSpecification(returnType);
             will(returnValue(mockReturnTypeSpec));
         }});
     }
@@ -75,7 +77,7 @@ public class ParameterAnnotationFacetFactoryTest extends AbstractFacetFactoryJUn
     @Before
     public void setUp() throws Exception {
         facetFactory = new ParameterAnnotationFacetFactory();
-        facetFactory.setSpecificationLookup(mockSpecificationLoaderSpi);
+        facetFactory.setServicesInjector(mockServicesInjector);
     }
 
     @After
@@ -93,9 +95,7 @@ public class ParameterAnnotationFacetFactoryTest extends AbstractFacetFactoryJUn
                         @Parameter(
                                 maxLength = 30
                         )
-                        final String name
-                ) {
-                }
+                        final String name) { }
             }
 
             // given
@@ -145,6 +145,10 @@ public class ParameterAnnotationFacetFactoryTest extends AbstractFacetFactoryJUn
 
             // given
             actionMethod = findMethod(Customer.class, "someAction", new Class[]{String.class} );
+
+            // expecting
+            context.ignoring(mockServicesInjector);
+
 
             // when
             final FacetFactory.ProcessParameterContext processParameterContext = new FacetFactory.ProcessParameterContext(Customer.class, actionMethod, 0, null, facetedMethodParameter);

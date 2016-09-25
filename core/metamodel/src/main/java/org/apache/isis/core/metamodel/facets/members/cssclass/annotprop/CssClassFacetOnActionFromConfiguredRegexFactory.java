@@ -24,11 +24,11 @@ import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+
 import org.apache.isis.core.commons.config.ConfigurationConstants;
-import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
@@ -36,12 +36,10 @@ import org.apache.isis.core.metamodel.facets.ContributeeMemberFacetFactory;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
 import org.apache.isis.core.metamodel.facets.FacetedMethod;
 import org.apache.isis.core.metamodel.facets.members.cssclass.CssClassFacet;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjectorAware;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.core.metamodel.spec.feature.ObjectMember;
 
-public class CssClassFacetOnActionFromConfiguredRegexFactory extends FacetFactoryAbstract implements ContributeeMemberFacetFactory, IsisConfigurationAware, ServicesInjectorAware {
+public class CssClassFacetOnActionFromConfiguredRegexFactory extends FacetFactoryAbstract implements ContributeeMemberFacetFactory {
 
     public CssClassFacetOnActionFromConfiguredRegexFactory() {
         super(FeatureType.ACTIONS_ONLY);
@@ -122,7 +120,7 @@ public class CssClassFacetOnActionFromConfiguredRegexFactory extends FacetFactor
     private Map<Pattern, String> getCssClassByPattern() {
         if (cssClassByPattern == null) {
             // build lazily
-            final String cssClassPatterns = configuration.getString("isis.reflector.facet.cssClass.patterns");
+            final String cssClassPatterns = getConfiguration().getString("isis.reflector.facet.cssClass.patterns");
             this.cssClassByPattern = buildCssClassByPattern(cssClassPatterns);
         }
         return cssClassByPattern;
@@ -154,21 +152,6 @@ public class CssClassFacetOnActionFromConfiguredRegexFactory extends FacetFactor
     //endregion
 
 
-    //region > injected
-    private IsisConfiguration configuration;
-
-    @Override
-    public void setConfiguration(final IsisConfiguration configuration) {
-        this.configuration = configuration;
-    }
-
-    private ServicesInjector servicesInjector;
-    @Override
-    public void setServicesInjector(ServicesInjector servicesInjector) {
-        this.servicesInjector = servicesInjector;
-    }
-
-    //endregion
 
 }
 

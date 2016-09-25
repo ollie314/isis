@@ -22,12 +22,12 @@ package org.apache.isis.core.metamodel.facets.object.encodeable.annotcfg;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.object.encodeable.EncodableFacetAbstract;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 
 public class EncodableFacetFromConfiguration extends EncodableFacetAbstract {
 
-    public EncodableFacetFromConfiguration(final String candidateEncoderDecoderName, final FacetHolder holder, final AdapterManager adapterManager, final ServicesInjector dependencyInjector) {
-        super(candidateEncoderDecoderName, null, holder, adapterManager, dependencyInjector);
+    public EncodableFacetFromConfiguration(final String candidateEncoderDecoderName, final FacetHolder holder, final ServicesInjector servicesInjector) {
+        super(candidateEncoderDecoderName, null, holder, servicesInjector.getPersistenceSessionServiceInternal(), servicesInjector);
 
     }
 }

@@ -19,13 +19,12 @@
 
 package org.apache.isis.core.metamodel.facets.object.domainobject.autocomplete;
 
-import org.apache.isis.applib.annotation.AutoComplete;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import java.lang.reflect.Method;
+
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
-import org.apache.isis.core.metamodel.facets.object.autocomplete.AutoCompleteFacet;
 import org.apache.isis.core.metamodel.facets.object.autocomplete.AutoCompleteFacetAbstract;
-import org.apache.isis.core.metamodel.runtimecontext.ServicesInjector;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
+import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 
 /**
  * @deprecated
@@ -33,25 +32,12 @@ import org.apache.isis.core.metamodel.spec.SpecificationLoader;
 @Deprecated
 public class AutoCompleteFacetForAutoCompleteAnnotation extends AutoCompleteFacetAbstract {
 
-    public static AutoCompleteFacet create(
-            final AutoComplete annotation,
-            final SpecificationLoader specificationLoader,
-            final AdapterManager adapterManager,
-            final ServicesInjector servicesInjector,
-            final FacetHolder holder) {
-
-        if(annotation == null) {
-            return null;
-        }
-
-        final Class<?> repositoryClass = annotation.repository();
-        final String actionName = annotation.action();
-
-        return new AutoCompleteFacetForAutoCompleteAnnotation(holder, repositoryClass, actionName, specificationLoader, adapterManager, servicesInjector);
-    }
-
-    private AutoCompleteFacetForAutoCompleteAnnotation(final FacetHolder holder, final Class<?> repositoryClass, final String actionName, final SpecificationLoader specificationLoader, final AdapterManager adapterManager, final ServicesInjector servicesInjector) {
-        super(holder, repositoryClass, actionName, specificationLoader, adapterManager, servicesInjector);
+    public AutoCompleteFacetForAutoCompleteAnnotation(
+            final FacetHolder holder,
+            final Class<?> repositoryClass,
+            final Method actionName,
+            final ServicesInjector servicesInjector) {
+        super(holder, repositoryClass, actionName, servicesInjector);
     }
 
 

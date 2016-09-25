@@ -23,22 +23,20 @@ import java.util.Iterator;
 
 import com.google.common.base.Splitter;
 
-import org.apache.isis.applib.profiles.Localization;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
-import org.apache.isis.core.metamodel.adapter.ResolveState;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
-import org.apache.isis.core.metamodel.adapter.oid.AggregatedOid;
-import org.apache.isis.core.metamodel.adapter.oid.CollectionOid;
 import org.apache.isis.core.metamodel.adapter.oid.Oid;
+import org.apache.isis.core.metamodel.adapter.oid.ParentedCollectionOid;
 import org.apache.isis.core.metamodel.adapter.oid.RootOid;
-import org.apache.isis.core.metamodel.adapter.oid.RootOidDefault;
 import org.apache.isis.core.metamodel.adapter.version.Version;
 import org.apache.isis.core.metamodel.spec.ObjectSpecId;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
-import org.apache.isis.core.metamodel.spec.SpecificationLoader;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.runtime.persistence.adapter.PojoAdapter;
+import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
 
 public class PojoAdapterBuilder {
+
+    private PersistenceSession persistenceSession;
 
     private PojoAdapterBuilder(){
     }
@@ -49,8 +47,6 @@ public class PojoAdapterBuilder {
     private ObjectSpecification objectSpec;
     
     private SpecificationLoader specificationLoader;
-    
-    private AdapterManager objectAdapterLookup;
     
     private ObjectSpecId objectSpecId = ObjectSpecId.of("CUS");
     private String identifier = "1";
@@ -64,49 +60,29 @@ public class PojoAdapterBuilder {
 
     private Version version;
 
-    private Localization localization;
-
     private AuthenticationSession authenticationSession;
 
     
-    public static enum Persistence {
+    public enum Persistence {
         TRANSIENT {
             @Override
             RootOid createOid(ObjectSpecId objectSpecId, String identifier) {
-                return RootOidDefault.createTransient(objectSpecId, identifier);
-            }
-
-            @Override
-            void changeStateOn(PojoAdapter pojoAdapter) {
-                pojoAdapter.changeState(ResolveState.TRANSIENT);
+                return RootOid.createTransient(objectSpecId, identifier);
             }
         },
         PERSISTENT {
             @Override
             RootOid createOid(ObjectSpecId objectSpecId, String identifier) {
-                return RootOidDefault.create(objectSpecId, identifier);
+                return RootOid.create(objectSpecId, identifier);
             }
-
-            @Override
-            void changeStateOn(PojoAdapter pojoAdapter) {
-                pojoAdapter.changeState(ResolveState.TRANSIENT);
-                pojoAdapter.changeState(ResolveState.RESOLVED);
-            }
-        }, 
+        },
         VALUE {
             @Override
             RootOid createOid(ObjectSpecId objectSpecId, String identifier) {
                 return null;
             }
-
-            @Override
-            void changeStateOn(PojoAdapter pojoAdapter) {
-                pojoAdapter.changeState(ResolveState.VALUE);
-            }
         };
         abstract RootOid createOid(ObjectSpecId objectSpecId, String identifier);
-
-        abstract void changeStateOn(PojoAdapter pojoAdapter);
     }
 
     public static enum Type {
@@ -115,15 +91,10 @@ public class PojoAdapterBuilder {
             Oid oidFor(RootOid rootOid, ObjectSpecId objectSpecId, String unused) {
                 return rootOid;
             }
-        }, AGGREGATED {
-            @Override
-            Oid oidFor(RootOid rootOid, ObjectSpecId objectSpecId, String aggregateLocalId) {
-                return new AggregatedOid(objectSpecId, rootOid, aggregateLocalId);
-            }
         }, COLLECTION {
             @Override
             Oid oidFor(RootOid rootOid, ObjectSpecId objectSpecId, String collectionId) {
-                return new CollectionOid(rootOid, collectionId);
+                return new ParentedCollectionOid(rootOid, collectionId);
             }
         }, VALUE {
             @Override
@@ -139,11 +110,6 @@ public class PojoAdapterBuilder {
         return new PojoAdapterBuilder();
     }
 
-    public PojoAdapterBuilder withAggregatedId(String aggregatedId) {
-        this.aggregatedId = aggregatedId;
-        return this;
-    }
-    
     public PojoAdapterBuilder withIdentifier(String identifier) {
         this.identifier = identifier;
         return this;
@@ -197,11 +163,11 @@ public class PojoAdapterBuilder {
         return this;
     }
 
-    public PojoAdapterBuilder with(AdapterManager objectAdapterLookup) {
-        this.objectAdapterLookup = objectAdapterLookup;
+    public PojoAdapterBuilder with(PersistenceSession persistenceSession) {
+        this.persistenceSession = persistenceSession;
         return this;
     }
-    
+
     public PojoAdapterBuilder with(SpecificationLoader specificationLoader) {
         this.specificationLoader = specificationLoader;
         return this;
@@ -212,11 +178,6 @@ public class PojoAdapterBuilder {
         return this;
     }
     
-    public PojoAdapterBuilder with(Localization localization) {
-        this.localization = localization;
-        return this;
-    }
-
     public PojoAdapterBuilder with(Version version) {
         this.version = version;
         return this;
@@ -230,7 +191,8 @@ public class PojoAdapterBuilder {
     public PojoAdapter build() {
         final RootOid rootOid = persistence.createOid(objectSpecId, identifier);
         final Oid oid = type.oidFor(rootOid, objectSpecId, aggregatedId);
-        final PojoAdapter pojoAdapter = new PojoAdapter(pojo, oid, specificationLoader, objectAdapterLookup, localization, authenticationSession) {
+        final PojoAdapter pojoAdapter = new PojoAdapter(pojo, oid, authenticationSession,
+                specificationLoader, persistenceSession) {
             @Override
             public ObjectSpecification getSpecification() { return objectSpec != null? objectSpec: super.getSpecification(); }
             @Override
@@ -238,7 +200,6 @@ public class PojoAdapterBuilder {
                 return titleString != null? titleString: super.titleString();
             }
         };
-        persistence.changeStateOn(pojoAdapter);
         if(persistence == Persistence.PERSISTENT && version != null) {
             pojoAdapter.setVersion(version);
         }

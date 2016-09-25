@@ -19,23 +19,37 @@
 
 package org.apache.isis.core.runtime.fixturedomainservice;
 
-import java.io.*;
-import java.util.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.Reader;
+import java.io.Writer;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.inject.Inject;
+
+import com.google.common.collect.Maps;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facets.collections.modify.CollectionFacet;
 import org.apache.isis.core.metamodel.facets.collections.modify.CollectionFacetUtils;
 import org.apache.isis.core.metamodel.facets.object.parseable.ParseableFacet;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.spec.ObjectSpecificationException;
-import org.apache.isis.core.metamodel.spec.SpecificationLoaderSpi;
 import org.apache.isis.core.metamodel.spec.feature.Contributed;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAssociation;
 import org.apache.isis.core.metamodel.spec.feature.OneToOneAssociation;
-import org.apache.isis.core.runtime.system.context.IsisContext;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
+import org.apache.isis.core.runtime.system.session.IsisSessionFactory;
 
 public class ObjectFixtureFilePersistor {
 
@@ -45,7 +59,7 @@ public class ObjectFixtureFilePersistor {
         final Set<Object> objects = new HashSet<Object>();
 
         final BufferedReader buffer = new BufferedReader(reader);
-        final LoadedObjects loaded = new LoadedObjects(objects);
+        final LoadedObjects loaded = new LoadedObjects(objects, specificationLoader, getPersistenceSession());
         String line;
         ObjectAdapter object = null;
         int lineNo = 0;
@@ -58,14 +72,14 @@ public class ObjectFixtureFilePersistor {
                     loadFieldData(object, loaded, line);
                 } else {
                     if (object != null && !object.representsPersistent()) {
-                        getPersistenceSession().makePersistent(object);
+                        getPersistenceSession().makePersistentInTransaction(object);
                     }
                     object = loaded.get(line);
                 }
             }
 
             if (object != null && !object.representsPersistent()) {
-                getPersistenceSession().makePersistent(object);
+                getPersistenceSession().makePersistentInTransaction(object);
             }
         } catch (final Exception e) {
             throw new FixtureException("failed to load data at line " + lineNo, e);
@@ -84,8 +98,10 @@ public class ObjectFixtureFilePersistor {
         try {
             final ObjectAssociation association = object.getSpecification().getAssociation(name);
             if (data.trim().length() == 0) {
-                if (!association.isEmpty(object) && association instanceof OneToOneAssociation) {
-                    ((OneToOneAssociation) association).set(object, null);
+                if (    association instanceof OneToOneAssociation &&
+                        !association.isEmpty(object, InteractionInitiatedBy.FRAMEWORK)) {
+                    final OneToOneAssociation property = (OneToOneAssociation) association;
+                    property.set(object, null, InteractionInitiatedBy.FRAMEWORK);
                 }
             } else {
                 if (association.isOneToManyAssociation()) {
@@ -94,13 +110,13 @@ public class ObjectFixtureFilePersistor {
                     for (int i = 0; i < ids.length; i++) {
                         elements[i] = loaded.get(ids[i]);
                     }
-                    final ObjectAdapter collection = association.get(object);
+                    final ObjectAdapter collection = association.get(object, InteractionInitiatedBy.FRAMEWORK);
                     final CollectionFacet facet = CollectionFacetUtils.getCollectionFacetFromSpec(collection);
                     facet.init(collection, elements);
                 } else if (association.getSpecification().isParseable()) {
                     data = data.replaceAll("\\n", "\n");
                     final ParseableFacet facet = association.getSpecification().getFacet(ParseableFacet.class);
-                    final ObjectAdapter value = facet.parseTextEntry(null, data, null);
+                    final ObjectAdapter value = facet.parseTextEntry(null, data, InteractionInitiatedBy.FRAMEWORK);
                     ((OneToOneAssociation) association).initAssociation(object, value);
                 } else if (association.isOneToOneAssociation()) {
                     final ObjectAdapter value = loaded.get(data);
@@ -116,7 +132,7 @@ public class ObjectFixtureFilePersistor {
         final PrintWriter writer = new PrintWriter(out);
         final SavedObjects saved = new SavedObjects();
         for (final Object object : objects) {
-            final ObjectAdapter adapter = getAdapterManager().adapterFor(object);
+            final ObjectAdapter adapter = getPersistenceSession().adapterFor(object);
             saveData(writer, adapter, saved);
         }
         out.close();
@@ -133,8 +149,8 @@ public class ObjectFixtureFilePersistor {
                 continue;
             }
 
-            final ObjectAdapter associatedObject = association.get(adapter);
-            final boolean isEmpty = association.isEmpty(adapter);
+            final ObjectAdapter associatedObject = association.get(adapter, InteractionInitiatedBy.FRAMEWORK);
+            final boolean isEmpty = association.isEmpty(adapter, InteractionInitiatedBy.FRAMEWORK);
             final String associationId = association.getId();
             writer.write("  " + associationId + ": ");
             if (isEmpty) {
@@ -163,28 +179,33 @@ public class ObjectFixtureFilePersistor {
         }
     }
 
-    
-    
+
+    @javax.inject.Inject
+    IsisSessionFactory isisSessionFactory;
+
     protected PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
+        return isisSessionFactory.getCurrentSession().getPersistenceSession();
     }
 
-    protected SpecificationLoaderSpi getSpecificationLoader() {
-        return IsisContext.getSpecificationLoader();
-    }
+    @javax.inject.Inject
+    SpecificationLoader specificationLoader;
 
-    protected AdapterManager getAdapterManager() {
-        return getPersistenceSession().getAdapterManager();
-    }
 }
 
 
 class LoadedObjects {
-    private final Map<String, ObjectAdapter> idMap = new HashMap<String, ObjectAdapter>();
+    private final Map<String, ObjectAdapter> idMap = Maps.newHashMap();
     private final Set<Object> objects;
+    private final SpecificationLoader specificationLoader;
+    private final PersistenceSession persistenceSession;
 
-    public LoadedObjects(final Set<Object> objects) {
+    public LoadedObjects(
+            final Set<Object> objects,
+            final SpecificationLoader specificationLoader,
+            final PersistenceSession persistenceSession) {
         this.objects = objects;
+        this.specificationLoader = specificationLoader;
+        this.persistenceSession = persistenceSession;
     }
 
     public ObjectAdapter get(final String data) {
@@ -196,21 +217,12 @@ class LoadedObjects {
         ObjectAdapter object = idMap.get(id);
         if (object == null) {
             final String className = data.substring(0, pos);
-            final ObjectSpecification specification = getSpecificationLoader().loadSpecification(className);
-            object = getPersistenceSession().createTransientInstance(specification);
+            final ObjectSpecification specification = specificationLoader.loadSpecification(className);
+            object = persistenceSession.createTransientInstance(specification);
             idMap.put(id, object);
             objects.add(object.getObject());
         }
         return object;
-    }
-
-    
-    protected PersistenceSession getPersistenceSession() {
-        return IsisContext.getPersistenceSession();
-    }
-
-    protected SpecificationLoaderSpi getSpecificationLoader() {
-        return IsisContext.getSpecificationLoader();
     }
 }
 

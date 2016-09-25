@@ -17,13 +17,17 @@
 package org.apache.isis.core.runtime.services.eventbus;
 
 import java.util.Map;
+
 import javax.annotation.PostConstruct;
 import javax.enterprise.context.RequestScoped;
+
 import com.google.common.base.Strings;
+
 import org.apache.isis.applib.NonRecoverableException;
 import org.apache.isis.applib.annotation.Programmatic;
 import org.apache.isis.applib.services.eventbus.EventBusImplementation;
 import org.apache.isis.applib.services.eventbus.EventBusService;
+import org.apache.isis.applib.services.registry.ServiceRegistry2;
 import org.apache.isis.core.commons.lang.ClassUtil;
 import org.apache.isis.core.metamodel.facets.Annotations;
 import org.apache.isis.core.runtime.services.RequestScopedService;
@@ -61,14 +65,14 @@ public abstract class EventBusServiceDefault extends EventBusService {
                 throw new IllegalArgumentException("Request-scoped services must register their proxy, not themselves");
             }
             // a singleton
-            if (!allowLateRegistration && this.eventBusImplementation != null) {
+            if (!allowLateRegistration && hasPosted()) {
                 // ... coming too late to the party.
-                throw new IllegalStateException("Event bus has already been created; too late to register any further (singleton) subscribers");
+                throw new IllegalStateException("Attempting to register '" + domainService.getClass().getSimpleName() + "' as a subscriber.  However events have already been posted and it is too late to register any further (singleton) subscribers.  Either use @DomainServiceLayout(menuOrder=...) on subscribing services to ensure that subscribers are initialized before any services that might post events, or alternatively use '" + KEY_ALLOW_LATE_REGISTRATION + "' configuration property to relax this check (meaning that some subscribers will miss some posted events)");
             }
         }
         super.register(domainService);
     }
-    
+
     //endregion
 
     //region > init, shutdown
@@ -116,6 +120,12 @@ public abstract class EventBusServiceDefault extends EventBusService {
 
     @Override
     protected org.apache.isis.applib.services.eventbus.EventBusImplementation newEventBus() {
+        final EventBusImplementation implementation = instantiateEventBus();
+        serviceRegistry2.injectServicesInto(implementation);
+        return implementation;
+    }
+
+    private EventBusImplementation instantiateEventBus() {
         if("guava".equals(implementation)) {
             return new EventBusImplementationForGuava();
         }
@@ -135,5 +145,8 @@ public abstract class EventBusServiceDefault extends EventBusService {
                 "Could not instantiate event bus implementation '" + implementation + "'");
     }
     //endregion
+
+    @javax.inject.Inject
+    ServiceRegistry2 serviceRegistry2;
 
 }

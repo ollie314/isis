@@ -22,7 +22,7 @@ package org.apache.isis.core.metamodel.spec.feature;
 import org.apache.isis.core.commons.authentication.AuthenticationSession;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.consent.Consent;
-import org.apache.isis.core.metamodel.consent.InteractionInvocationMethod;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.interactions.AccessContext;
 import org.apache.isis.core.metamodel.interactions.InteractionContext;
 import org.apache.isis.core.metamodel.interactions.ValidityContext;
@@ -33,71 +33,71 @@ public interface OneToManyAssociation extends ObjectAssociation, OneToManyFeatur
     // add
     // /////////////////////////////////////////////////////////////
 
-    /**
-     * Creates an {@link InteractionContext} that represents validation of a
-     * candidate object to be added to the collection.
-     * 
-     * <p>
-     * Typically it is easier to just call
-     * {@link #isValidToAdd(ObjectAdapter, ObjectAdapter)} or
-     * {@link #isValidToAddResult(ObjectAdapter, ObjectAdapter)}; this is
-     * provided as API for symmetry with interactions (such as
-     * {@link AccessContext} accesses) have no corresponding vetoing methods.
-     */
-    public ValidityContext<?> createValidateAddInteractionContext(AuthenticationSession session, InteractionInvocationMethod invocationMethod, ObjectAdapter owningObjectAdapter, ObjectAdapter proposedObjectToAdd);
 
     /**
      * Determines if the specified element can be added to the collection field,
      * represented as a {@link Consent}.
-     * 
+     *
      * <p>
-     * If allowed the {@link #addElement(ObjectAdapter, ObjectAdapter) add}
-     * method can be called with the same parameters, .
-     * @see #isValidToAddResult(ObjectAdapter, ObjectAdapter)
+     * If allowed the {@link #addElement(ObjectAdapter, ObjectAdapter, InteractionInitiatedBy) add}
+     * method can be called with the same parameters.
+     *
+     * @see #addElement(ObjectAdapter, ObjectAdapter, InteractionInitiatedBy)
      */
-    Consent isValidToAdd(ObjectAdapter owningObjectAdapter, ObjectAdapter proposedObjectToAdd);
+    Consent isValidToAdd(
+            ObjectAdapter owningObjectAdapter,
+            ObjectAdapter proposedObjectToAdd,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     /**
      * Add the specified element to this collection field in the specified
      * object.
+     *
+     * <p>
+     *     Should be preceded by call to {@link #isValidToAdd(ObjectAdapter, ObjectAdapter)}.
+     * </p>
+     *
+     * @see #isValidToAdd(ObjectAdapter, ObjectAdapter)
      */
-    void addElement(ObjectAdapter owningObjectAdapter, ObjectAdapter objectToAdd);
+    void addElement(
+            ObjectAdapter owningObjectAdapter,
+            ObjectAdapter objectToAdd,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     // /////////////////////////////////////////////////////////////
     // remove
     // /////////////////////////////////////////////////////////////
 
-    /**
-     * Creates an {@link InteractionContext} that represents validation of a
-     * candidate object to be removed from the collection.
-     * 
-     * <p>
-     * Typically it is easier to just call
-     * {@link #isValidToAdd(ObjectAdapter, ObjectAdapter)} or
-     * {@link #isValidToAddResult(ObjectAdapter, ObjectAdapter)}; this is
-     * provided as API for symmetry with interactions (such as
-     * {@link AccessContext} accesses) have no corresponding vetoing methods.
-     */
-    ValidityContext<?> createValidateRemoveInteractionContext(AuthenticationSession session, InteractionInvocationMethod invocationMethod, ObjectAdapter owningObjectAdapter, ObjectAdapter proposedObjectToRemove);
 
     /**
      * Determines if the specified element can be removed from the collection
      * field, represented as a {@link Consent}.
      * 
      * <p>
-     * If allowed the {@link #removeElement(ObjectAdapter, ObjectAdapter)
-     * remove} method can be called with the same parameters, .
+     * If allowed the {@link #removeElement(ObjectAdapter, ObjectAdapter, InteractionInitiatedBy)
+     * remove} method can be called with the same parameters.
      * 
-     * @see #removeElement(ObjectAdapter, ObjectAdapter)
-     * @see #isValidToAddResult(ObjectAdapter, ObjectAdapter)
+     * @see #removeElement(ObjectAdapter, ObjectAdapter, InteractionInitiatedBy)
      */
-    Consent isValidToRemove(ObjectAdapter owningObjectAdapter, ObjectAdapter proposedObjectToRemove);
+    Consent isValidToRemove(
+            ObjectAdapter owningObjectAdapter,
+            ObjectAdapter proposedObjectToRemove,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     /**
      * Remove the specified element from this collection field in the specified
      * object.
+     *
+     * <p>
+     *     Should be preceded by call to {@link #isValidToRemove(ObjectAdapter, ObjectAdapter)}.
+     * </p>
+     *
+     * @see #isValidToRemove(ObjectAdapter, ObjectAdapter)
      */
-    void removeElement(ObjectAdapter owningObjectAdapter, ObjectAdapter oObjectToRemove);
+    void removeElement(
+            ObjectAdapter owningObjectAdapter,
+            ObjectAdapter oObjectToRemove,
+            final InteractionInitiatedBy interactionInitiatedBy);
 
     // /////////////////////////////////////////////////////////////
     // clear
@@ -105,7 +105,10 @@ public interface OneToManyAssociation extends ObjectAssociation, OneToManyFeatur
 
     /**
      * Remove all elements from this collection field in the specified object.
+     *
+     * @deprecated - seemingly unused by any code?
      */
+    @Deprecated
     void clearCollection(ObjectAdapter inObject);
 
 }

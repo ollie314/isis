@@ -22,7 +22,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import javax.jdo.PersistenceManager;
 import javax.jdo.Query;
 
 import com.google.common.collect.Lists;
@@ -36,15 +35,15 @@ import org.apache.isis.core.metamodel.services.container.query.QueryCardinality;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.metamodel.spec.feature.OneToOneAssociation;
 import org.apache.isis.core.runtime.persistence.query.PersistenceQueryFindUsingApplibQueryDefault;
+import org.apache.isis.core.runtime.system.persistence.PersistenceSession;
 import org.apache.isis.objectstore.jdo.datanucleus.metamodel.JdoPropertyUtils;
-import org.apache.isis.objectstore.jdo.datanucleus.persistence.FrameworkSynchronizer;
 
 public class PersistenceQueryFindUsingApplibQueryProcessor extends PersistenceQueryProcessorAbstract<PersistenceQueryFindUsingApplibQueryDefault> {
     
     private static final Logger LOG = LoggerFactory.getLogger(PersistenceQueryFindUsingApplibQueryProcessor.class);
 
-    public PersistenceQueryFindUsingApplibQueryProcessor(final PersistenceManager persistenceManager, final FrameworkSynchronizer frameworkSynchronizer) {
-        super(persistenceManager, frameworkSynchronizer);
+    public PersistenceQueryFindUsingApplibQueryProcessor(final PersistenceSession persistenceSession) {
+        super(persistenceSession);
     }
 
     public List<ObjectAdapter> process(final PersistenceQueryFindUsingApplibQueryDefault persistenceQuery) {
@@ -58,7 +57,7 @@ public class PersistenceQueryFindUsingApplibQueryProcessor extends PersistenceQu
             results = getResults(persistenceQuery);
         }
         
-        return loadAdapters(objectSpec, results);
+        return loadAdapters(results);
     }
 
     // special case handling
@@ -75,7 +74,7 @@ public class PersistenceQueryFindUsingApplibQueryProcessor extends PersistenceQu
         final OneToOneAssociation pkOtoa = JdoPropertyUtils.getPrimaryKeyPropertyFor(objectSpec);
         final String pkOtoaId = pkOtoa.getId();
         final String filter = pkOtoaId + "==" + map.get(pkOtoaId);
-        final Query jdoQuery = getPersistenceManager().newQuery(cls, filter);
+        final Query jdoQuery = persistenceSession.newJdoQuery(cls, filter);
 
         // http://www.datanucleus.org/servlet/jira/browse/NUCCORE-1103
         jdoQuery.addExtension("datanucleus.multivaluedFetch", "none");
@@ -95,13 +94,13 @@ public class PersistenceQueryFindUsingApplibQueryProcessor extends PersistenceQu
     private List<?> getResults(final PersistenceQueryFindUsingApplibQueryDefault persistenceQuery) {
         
         final String queryName = persistenceQuery.getQueryName();
-        final Map<String, Object> argumentsByParameterName = unwrap(persistenceQuery.getArgumentsAdaptersByParameterName());
+        final Map<String, Object> argumentsByParameterName = unwrap(
+                persistenceQuery.getArgumentsAdaptersByParameterName());
         final QueryCardinality cardinality = persistenceQuery.getCardinality();
         final ObjectSpecification objectSpec = persistenceQuery.getSpecification();
 
-        final PersistenceManager persistenceManager = getJdoObjectStore().getPersistenceManager();
         final Class<?> cls = objectSpec.getCorrespondingClass();
-        final Query jdoQuery = persistenceManager.newNamedQuery(cls, queryName);
+        final Query jdoQuery = persistenceSession.newJdoNamedQuery(cls, queryName);
         
         // http://www.datanucleus.org/servlet/jira/browse/NUCCORE-1103
         jdoQuery.addExtension("datanucleus.multivaluedFetch", "none");

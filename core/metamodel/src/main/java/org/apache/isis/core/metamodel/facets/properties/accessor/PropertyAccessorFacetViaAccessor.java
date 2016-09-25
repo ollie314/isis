@@ -23,18 +23,34 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.isis.applib.DomainObjectContainer;
+import org.apache.isis.core.commons.authentication.AuthenticationSession;
+import org.apache.isis.core.commons.authentication.AuthenticationSessionProvider;
+import org.apache.isis.core.commons.config.IsisConfiguration;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
+import org.apache.isis.core.metamodel.deployment.DeploymentCategory;
 import org.apache.isis.core.metamodel.facetapi.FacetHolder;
 import org.apache.isis.core.metamodel.facets.ImperativeFacet;
 import org.apache.isis.core.metamodel.facets.propcoll.accessor.PropertyOrCollectionAccessorFacetAbstract;
+import org.apache.isis.core.metamodel.specloader.SpecificationLoader;
 
-public class PropertyAccessorFacetViaAccessor extends PropertyOrCollectionAccessorFacetAbstract implements ImperativeFacet {
+public class PropertyAccessorFacetViaAccessor
+        extends PropertyOrCollectionAccessorFacetAbstract
+        implements ImperativeFacet {
+
 
     private final Method method;
 
-    public PropertyAccessorFacetViaAccessor(final Method method, final FacetHolder holder) {
-        super(holder);
+    public PropertyAccessorFacetViaAccessor(
+            final Method method,
+            final FacetHolder holder,
+            final DeploymentCategory deploymentCategory,
+            final IsisConfiguration isisConfiguration,
+            final SpecificationLoader specificationLoader,
+            final AuthenticationSessionProvider authenticationSessionProvider,
+            final AdapterManager adapterManager) {
+        super(holder, deploymentCategory, isisConfiguration, specificationLoader, authenticationSessionProvider, adapterManager);
         this.method = method;
     }
 
@@ -53,24 +69,28 @@ public class PropertyAccessorFacetViaAccessor extends PropertyOrCollectionAccess
     }
 
     @Override
-    public boolean impliesResolve() {
-        return true;
-    }
+    public Object getProperty(
+            final ObjectAdapter owningAdapter,
+            final InteractionInitiatedBy interactionInitiatedBy) {
+        final Object referencedObject = ObjectAdapter.InvokeUtils.invoke(method, owningAdapter);
 
-    /**
-     * Bytecode cannot automatically call
-     * {@link DomainObjectContainer#objectChanged(Object)} because cannot
-     * distinguish whether interacting with accessor to read it or to modify its
-     * contents.
-     */
-    @Override
-    public boolean impliesObjectChanged() {
-        return false;
-    }
+        if(referencedObject == null) {
+            return null;
+        }
 
-    @Override
-    public Object getProperty(final ObjectAdapter owningAdapter) {
-        return ObjectAdapter.InvokeUtils.invoke(method, owningAdapter);
+        final AuthenticationSession authenticationSession = getAuthenticationSession();
+        final DeploymentCategory deploymentCategory = getDeploymentCategory();
+
+        boolean filterForVisibility = getConfiguration().getBoolean("isis.reflector.facet.filterVisibility", true);
+        if(filterForVisibility) {
+            final ObjectAdapter referencedAdapter = getAdapterManager().adapterFor(referencedObject);
+            final boolean visible = ObjectAdapter.Util
+                    .isVisible(referencedAdapter, interactionInitiatedBy);
+            if (!visible) {
+                return null;
+            }
+        }
+        return referencedObject;
     }
 
     @Override

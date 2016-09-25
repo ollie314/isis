@@ -20,11 +20,13 @@
 package org.apache.isis.core.metamodel.facets.object.domainobject;
 
 import java.util.UUID;
+
 import org.jmock.Expectations;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
 import org.apache.isis.applib.annotation.Audited;
 import org.apache.isis.applib.annotation.DomainObject;
 import org.apache.isis.applib.annotation.Immutable;
@@ -56,7 +58,7 @@ import org.apache.isis.core.metamodel.facets.object.immutable.ImmutableFacet;
 import org.apache.isis.core.metamodel.facets.object.immutable.immutableannot.ImmutableFacetForImmutableAnnotation;
 import org.apache.isis.core.metamodel.facets.object.objectspecid.ObjectSpecIdFacet;
 import org.apache.isis.core.metamodel.facets.object.publishedobject.PublishedObjectFacet;
-import org.apache.isis.core.metamodel.facets.object.publishedobject.PublishedObjectFacetAbstract;
+import org.apache.isis.core.metamodel.facets.object.publishedobject.PublishedObjectPayloadFactoryDefault;
 import org.apache.isis.core.metamodel.facets.object.viewmodel.ViewModelFacet;
 import org.apache.isis.core.metamodel.facets.objectvalue.choices.ChoicesFacet;
 import org.apache.isis.core.metamodel.spec.ObjectSpecId;
@@ -73,7 +75,9 @@ public class DomainObjectAnnotationFacetFactoryTest extends AbstractFacetFactory
     @Before
     public void setUp() throws Exception {
         facetFactory = new DomainObjectAnnotationFacetFactory();
-        facetFactory.setConfiguration(mockConfiguration);
+
+        facetFactory.setServicesInjector(mockServicesInjector);
+
     }
 
     @After
@@ -443,8 +447,8 @@ public class DomainObjectAnnotationFacetFactoryTest extends AbstractFacetFactory
 
                 final PublishedObject.PayloadFactory payloadFactory = ((PublishedObjectFacetForDomainObjectAnnotationAsConfigured) facet).value();
 
-                assertThat(payloadFactory, instanceOf(PublishedObjectFacetAbstract.LegacyAdapter.class));
-                final PublishedObjectFacetAbstract.LegacyAdapter legacyAdapter = (PublishedObjectFacetAbstract.LegacyAdapter) payloadFactory;
+                assertThat(payloadFactory, instanceOf(PublishedObjectPayloadFactoryDefault.class));
+                final PublishedObjectPayloadFactoryDefault legacyAdapter = (PublishedObjectPayloadFactoryDefault) payloadFactory;
 
                 final PublishingPayloadFactoryForObject specifiedPayloadFactory = legacyAdapter.getPayloadFactory();
                 assertThat(specifiedPayloadFactory, instanceOf(CustomerPayloadFactory.class));
@@ -505,8 +509,8 @@ public class DomainObjectAnnotationFacetFactoryTest extends AbstractFacetFactory
 
                 final PublishedObject.PayloadFactory payloadFactory = ((PublishedObjectFacetForDomainObjectAnnotation) facet).value();
 
-                assertThat(payloadFactory, instanceOf(PublishedObjectFacetForDomainObjectAnnotation.LegacyAdapter.class));
-                final PublishedObjectFacetForDomainObjectAnnotation.LegacyAdapter legacyAdapter = (PublishedObjectFacetForDomainObjectAnnotation.LegacyAdapter) payloadFactory;
+                assertThat(payloadFactory, instanceOf(PublishedObjectPayloadFactoryDefault.class));
+                final PublishedObjectPayloadFactoryDefault legacyAdapter = (PublishedObjectPayloadFactoryDefault) payloadFactory;
 
                 final PublishingPayloadFactoryForObject specifiedPayloadFactory = legacyAdapter.getPayloadFactory();
                 assertThat(specifiedPayloadFactory, instanceOf(CustomerPayloadFactory.class));

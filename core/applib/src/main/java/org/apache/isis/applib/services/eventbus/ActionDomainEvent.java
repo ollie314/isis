@@ -25,6 +25,7 @@ import org.apache.isis.applib.Identifier;
 import org.apache.isis.applib.annotation.ActionSemantics;
 import org.apache.isis.applib.annotation.SemanticsOf;
 import org.apache.isis.applib.services.command.Command;
+import org.apache.isis.applib.services.command.CommandContext;
 import org.apache.isis.applib.util.ObjectContracts;
 
 public abstract class ActionDomainEvent<S> extends AbstractInteractionEvent<S> {
@@ -32,33 +33,89 @@ public abstract class ActionDomainEvent<S> extends AbstractInteractionEvent<S> {
     private static final long serialVersionUID = 1L;
 
     //region > Default class
-
     /**
-     * Propagated if no custom subclass was specified using
-     * {@link org.apache.isis.applib.annotation.Action#domainEvent()} annotation attribute.
+     * This class is the default for the
+     * {@link org.apache.isis.applib.annotation.Action#domainEvent()} annotation attribute.  Whether this
+     * raises an event or not depends upon the "isis.reflector.facet.actionAnnotation.domainEvent.postForDefault"
+     * configuration property.
      */
     public static class Default extends ActionInteractionEvent<Object> {
         private static final long serialVersionUID = 1L;
+        public Default(){}
+        @Deprecated
         public Default(Object source, Identifier identifier, Object... arguments) {
             super(source, identifier, arguments);
         }
     }
     //endregion
 
+    //region > Noop class
+
+    /**
+     * Convenience class to use indicating that an event should <i>not</i> be posted (irrespective of the configuration
+     * property setting for the {@link Default} event.
+     */
+    public static class Noop extends ActionInteractionEvent<Object> {
+        private static final long serialVersionUID = 1L;
+    }
+    //endregion
+
+    //region > Doop class
+
+    /**
+     * Convenience class meaning that an event <i>should</i> be posted (irrespective of the configuration
+     * property setting for the {@link Default} event..
+     */
+    public static class Doop extends ActionInteractionEvent<Object> {
+        private static final long serialVersionUID = 1L;
+    }
+    //endregion
+
+
     //region > constructors
+
+    /**
+     * If used then the framework will set state via (non-API) setters.
+     *
+     * <p>
+     *     Recommended because it reduces the amount of boilerplate in the domain object classes.
+     * </p>
+     */
+    public ActionDomainEvent() {
+    }
+
+    /**
+     * @deprecated - the {@link #ActionDomainEvent() no-arg constructor} is recommended instead, to reduce boilerplate.
+     */
+    @Deprecated
     public ActionDomainEvent(
             final S source,
             final Identifier identifier) {
         super(source, identifier);
     }
 
+    /**
+     * @deprecated - the {@link #ActionDomainEvent() no-arg constructor} is recommended instead, to reduce boilerplate.
+     */
+    @Deprecated
     public ActionDomainEvent(
             final S source,
             final Identifier identifier,
             final Object... arguments) {
-        this(source, identifier, arguments != null? Arrays.asList(arguments): Collections.emptyList());
+        this(source, identifier,
+                asList(arguments));
     }
 
+    private static List<Object> asList(final Object[] arguments) {
+        return arguments != null
+                ? Arrays.asList(arguments)
+                : Collections.emptyList();
+    }
+
+    /**
+     * @deprecated - the {@link #ActionDomainEvent() no-arg constructor} is recommended instead, to reduce boilerplate.
+     */
+    @Deprecated
     public ActionDomainEvent(
             final S source,
             final Identifier identifier,
@@ -72,24 +129,19 @@ public abstract class ActionDomainEvent<S> extends AbstractInteractionEvent<S> {
     private Command command;
 
     /**
-     * The {@link org.apache.isis.applib.services.command.Command} for this action.
-     *
-     * <p>
-     * Set when in {@link org.apache.isis.applib.services.eventbus.AbstractInteractionEvent.Phase#EXECUTING} and {@link org.apache.isis.applib.services.eventbus.AbstractInteractionEvent.Phase#EXECUTED}, but not for earlier phases.
-     *
-     * <p>
-     * The command is set by the framework based on the configured
-     * {@link org.apache.isis.applib.services.command.CommandContext}) service).  Ths command may or may not be
-     * persisted, depending on the which implementation of
-     * {@link org.apache.isis.applib.services.command.spi.CommandService} service is configured.
+     * @deprecated - use {@link CommandContext#getCommand()} to obtain the current {@link Command}.
      */
+    @Deprecated
     public Command getCommand() {
         return command;
     }
 
     /**
      * Not API - set by the framework.
+     *
+     * @deprecated - the corresponding {@link #getCommand()} should not be called, instead use {@link CommandContext#getCommand()} to obtain the current {@link Command}.
      */
+    @Deprecated
     public void setCommand(Command command) {
         this.command = command;
     }
@@ -101,6 +153,10 @@ public abstract class ActionDomainEvent<S> extends AbstractInteractionEvent<S> {
     }
 
     private ActionSemantics.Of actionSemantics;
+
+    /**
+     * @deprecated - use {@link #getSemantics()} instead.
+     */
     @Deprecated
     public ActionSemantics.Of getActionSemantics() {
         return actionSemantics;
@@ -136,6 +192,24 @@ public abstract class ActionDomainEvent<S> extends AbstractInteractionEvent<S> {
     }
     //endregion
 
+
+    // region > mixedIn
+    private Object mixedIn;
+
+    /**
+     * Populated only for mixins; holds the underlying domain object that the mixin contributes to.
+     */
+    public Object getMixedIn() {
+        return mixedIn;
+    }
+    /**
+     * Not API - set by the framework.
+     */
+    public void setMixedIn(final Object mixedIn) {
+        this.mixedIn = mixedIn;
+    }
+    // endregion
+
     //region > arguments
     private List<Object> arguments;
     /**
@@ -167,7 +241,6 @@ public abstract class ActionDomainEvent<S> extends AbstractInteractionEvent<S> {
      *     Only available for the {@link org.apache.isis.applib.services.eventbus.AbstractDomainEvent.Phase#EXECUTED}
      *     {@link #getEventPhase() phase}.
      * </p>
-     * @return
      */
     public Object getReturnValue() {
         return returnValue;
@@ -175,7 +248,6 @@ public abstract class ActionDomainEvent<S> extends AbstractInteractionEvent<S> {
 
     /**
      * Not API - set by the framework
-     * @param returnValue
      */
     public void setReturnValue(final Object returnValue) {
         this.returnValue = returnValue;

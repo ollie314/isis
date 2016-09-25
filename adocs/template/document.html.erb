@@ -46,6 +46,20 @@
     <![endif]-->
 
 
+
+    <style type="text/css">
+        pre code {
+            background-color: inherit;
+            border-style: none;
+        }
+
+        pre code > span:first-child {
+            margin-left: -5px;
+        }
+
+    <style>
+
+    <!--
     <style type="text/css">
         <%= ::Asciidoctor::Stylesheets.instance.coderay_stylesheet_data %>
 
@@ -76,6 +90,7 @@
          }
 
     <style>
+    -->
 
     <style>
     .github-fork-ribbon-wrapper.right {
@@ -127,6 +142,7 @@
             color: #003b6b;
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         }
+        
     </style>
 
     <style>
@@ -151,6 +167,11 @@
 
         div#doc-content {
             margin-top: 30px;
+        }
+
+        div.documentation-page table.frame-all {
+            border-left: none;
+            border-right: none;
         }
 
         body div#toc li.active-region:before,
@@ -338,7 +359,7 @@
 
 <<div class="github-fork-ribbon-wrapper right" style="position: fixed;">
     <div class="github-fork-ribbon">
-        <a href="https://github.com/apache/isis/fork">Fork me on GitHub</a>
+        <a href="https://github.com/apache/isis#fork-destination-box">Fork me on GitHub</a>
     </div>
 </div>
 
@@ -399,7 +420,7 @@
         <footer>
           <hr>
           <p class="small">
-          Copyright &copy; 2010~2015 The Apache&nbsp;Software&nbsp;Foundation, licensed under the Apache&nbsp;License,&nbsp;v2.0.
+          Copyright &copy; 2010~2016 The Apache&nbsp;Software&nbsp;Foundation, licensed under the Apache&nbsp;License,&nbsp;v2.0.
           <br/>
           Apache, the Apache feather logo, Apache&nbsp;Isis, and the Apache&nbsp;Isis project logo are all trademarks of The&nbsp;Apache&nbsp;Software&nbsp;Foundation.
           </p>

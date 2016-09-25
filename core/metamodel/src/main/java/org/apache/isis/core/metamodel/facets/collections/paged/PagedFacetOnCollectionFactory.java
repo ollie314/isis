@@ -20,9 +20,9 @@
 package org.apache.isis.core.metamodel.facets.collections.paged;
 
 import java.util.Properties;
+
 import org.apache.isis.applib.annotation.Paged;
 import org.apache.isis.core.commons.config.IsisConfiguration;
-import org.apache.isis.core.commons.config.IsisConfigurationAware;
 import org.apache.isis.core.metamodel.facetapi.FacetUtil;
 import org.apache.isis.core.metamodel.facetapi.FeatureType;
 import org.apache.isis.core.metamodel.facetapi.MetaModelValidatorRefiner;
@@ -30,6 +30,7 @@ import org.apache.isis.core.metamodel.facets.Annotations;
 import org.apache.isis.core.metamodel.facets.ContributeeMemberFacetFactory;
 import org.apache.isis.core.metamodel.facets.FacetFactoryAbstract;
 import org.apache.isis.core.metamodel.facets.object.paged.PagedFacet;
+import org.apache.isis.core.metamodel.services.ServicesInjector;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorComposite;
 import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorForDeprecatedAnnotation;
 
@@ -38,11 +39,10 @@ import org.apache.isis.core.metamodel.specloader.validator.MetaModelValidatorFor
  */
 @Deprecated
 public class PagedFacetOnCollectionFactory extends FacetFactoryAbstract
-        implements ContributeeMemberFacetFactory, IsisConfigurationAware,MetaModelValidatorRefiner {
+        implements ContributeeMemberFacetFactory, MetaModelValidatorRefiner {
 
     private final MetaModelValidatorForDeprecatedAnnotation validator = new MetaModelValidatorForDeprecatedAnnotation(Paged.class);
 
-    private IsisConfiguration configuration;
 
     public PagedFacetOnCollectionFactory() {
         super(FeatureType.COLLECTIONS_ONLY);
@@ -84,15 +84,16 @@ public class PagedFacetOnCollectionFactory extends FacetFactoryAbstract
 
     // //////////////////////////////////////
 
-    public IsisConfiguration getConfiguration() {
-        return configuration;
-    }
+
 
     @Override
-    public void setConfiguration(IsisConfiguration configuration) {
-        this.configuration = configuration;
+    public void setServicesInjector(final ServicesInjector servicesInjector) {
+        super.setServicesInjector(servicesInjector);
+        final IsisConfiguration configuration = getConfiguration();
+
         validator.setConfiguration(configuration);
     }
+
 
 
 

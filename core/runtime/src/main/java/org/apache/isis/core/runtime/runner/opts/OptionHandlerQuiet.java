@@ -19,15 +19,19 @@
 
 package org.apache.isis.core.runtime.runner.opts;
 
-import static org.apache.isis.core.runtime.runner.Constants.QUIET_OPT;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
 
-import org.apache.isis.core.commons.config.IsisConfigurationBuilder;
+import org.apache.isis.core.commons.configbuilder.IsisConfigurationBuilder;
 import org.apache.isis.core.runtime.optionhandler.BootPrinter;
 import org.apache.isis.core.runtime.optionhandler.OptionHandlerAbstract;
 
+import static org.apache.isis.core.runtime.runner.Constants.QUIET_OPT;
+
+/**
+ * @deprecated - this seems to be a no-op; it is no longer registered in IsisRunner/IsisWebServer
+ */
+@Deprecated
 public class OptionHandlerQuiet extends OptionHandlerAbstract {
 
     public OptionHandlerQuiet() {
@@ -45,7 +49,7 @@ public class OptionHandlerQuiet extends OptionHandlerAbstract {
     }
 
     @Override
-    public void primeConfigurationBuilder(final IsisConfigurationBuilder isisConfigurationBuilder) {
+    public void prime(final IsisConfigurationBuilder isisConfigurationBuilder) {
         // TODO need to do what, exactly???
     }
 

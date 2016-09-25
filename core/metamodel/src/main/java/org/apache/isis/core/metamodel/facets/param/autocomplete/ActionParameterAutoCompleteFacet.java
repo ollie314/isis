@@ -20,6 +20,7 @@
 package org.apache.isis.core.metamodel.facets.param.autocomplete;
 
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facetapi.Facet;
 
 /**
@@ -32,7 +33,10 @@ import org.apache.isis.core.metamodel.facetapi.Facet;
  */
 public interface ActionParameterAutoCompleteFacet extends Facet {
 
-    public Object[] autoComplete(ObjectAdapter inObject, String searchArg);
+    public Object[] autoComplete(
+            final ObjectAdapter inObject,
+            final String searchArg,
+            final InteractionInitiatedBy interactionInitiatedBy);
     /**
      * The minimum number of characters that need to be entered.
      */

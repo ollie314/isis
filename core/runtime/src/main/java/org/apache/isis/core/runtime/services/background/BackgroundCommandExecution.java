@@ -35,7 +35,6 @@ import org.apache.isis.applib.services.iactn.Interaction;
 import org.apache.isis.applib.services.iactn.InteractionContext;
 import org.apache.isis.applib.services.jaxb.JaxbService;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
-import org.apache.isis.core.metamodel.adapter.oid.RootOid;
 import org.apache.isis.core.metamodel.consent.InteractionInitiatedBy;
 import org.apache.isis.core.metamodel.facets.actions.action.invocation.CommandUtil;
 import org.apache.isis.core.metamodel.spec.ObjectSpecification;
@@ -175,11 +174,7 @@ public abstract class BackgroundCommandExecution extends AbstractIsisSessionTemp
 
                             for (OidDto targetOidDto : targetOidDtos) {
 
-                                final Bookmark bookmark = Bookmark.from(targetOidDto);
-                                final Object targetObject = bookmarkService.lookup(bookmark);
-
-                                final ObjectAdapter targetAdapter = adapterFor(targetObject);
-
+                                final ObjectAdapter targetAdapter = targetAdapterFor(targetOidDto);
                                 final ObjectAction objectAction = findObjectAction(targetAdapter, memberId);
 
                                 // we pass 'null' for the mixedInAdapter; if this action _is_ a mixin then
@@ -222,18 +217,21 @@ public abstract class BackgroundCommandExecution extends AbstractIsisSessionTemp
                     }
 
                 } catch (RuntimeException e) {
-                    // this doesn't really make sense if >1 action
-                    // in any case, the capturing of the action interaction should be the
-                    // responsibility of auditing/profiling
+                    // hmmm, this doesn't really make sense if >1 action
+                    //
+                    // in any case, the capturing of the result of the action invocation should be the
+                    // responsibility of the interaction...
                     backgroundCommand.setException(Throwables.getStackTraceAsString(e));
 
-                    // alternatively, could have used ...
-                    Exception unused = backgroundInteraction.getPriorExecution().getThrew();
-
-                    backgroundInteraction.getCurrentExecution().setThrew(e);
+                    // lower down the stack the IsisTransactionManager will have set the transaction to abort
+                    // however, we don't want that to occur (because any changes made to the backgroundCommand itself
+                    // would also be rolled back, and it would keep getting picked up again by a scheduler for
+                    // processing); instead we clear the abort cause and ensure we can continue.
+                    transactionManager.getCurrentTransaction().clearAbortCauseAndContinue();
                 }
 
-                backgroundCommand.setCompletedAt(backgroundInteraction.getPriorExecution().getCompletedAt());
+                final Interaction.Execution priorExecution = backgroundInteraction.getPriorExecution();
+                backgroundCommand.setCompletedAt(priorExecution.getCompletedAt());
             }
 
             private ObjectAction findObjectAction(
@@ -314,16 +312,39 @@ public abstract class BackgroundCommandExecution extends AbstractIsisSessionTemp
             if(arg == null) {
                 return null;
             }
-            if(Bookmark.class != argType) {
-                return adapterFor(arg);
-            } else {
-                final Bookmark argBookmark = (Bookmark)arg;
-                final RootOid rootOid = RootOid.create(argBookmark);
-                return adapterFor(rootOid);
-            }
+            return argAdapterFor(argType, arg);
+
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    protected ObjectAdapter targetAdapterFor(final OidDto targetOidDto) {
+
+//        // this is the original code, but it can be simplified ...
+//        // (moved out to separate method so that, if proven wrong, can override as a patch)
+
+//      final Bookmark bookmark = Bookmark.from(targetOidDto);
+//      final Object targetObject = bookmarkService.lookup(bookmark);
+//      final ObjectAdapter targetAdapter = adapterFor(targetObject);
+
+        return adapterFor(targetOidDto);
+    }
+
+    protected ObjectAdapter argAdapterFor(final Class<?> argType, final Object arg) {
+
+//        // this is the original code, but it can be simplified ...
+//        // (moved out to separate method so that, if proven wrong, can override as a patch)
+
+//        if(Bookmark.class != argType) {
+//            return adapterFor(arg);
+//        } else {
+//            final Bookmark argBookmark = (Bookmark)arg;
+//            final RootOid rootOid = RootOid.create(argBookmark);
+//            return adapterFor(rootOid);
+//        }
+
+        return adapterFor(arg);
     }
 
     private ObjectAdapter[] argAdaptersFor(final ActionDto actionDto) {
